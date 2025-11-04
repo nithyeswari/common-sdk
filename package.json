@@ -1,0 +1,59 @@
+{
+  "name": "openapi-redux-sdk-generator",
+  "version": "1.0.0",
+  "description": "CLI tool to generate Redux-based client SDKs from OpenAPI specifications",
+  "main": "dist/index.js",
+  "bin": {
+    "openapi-redux-gen": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "prepare": "npm run build",
+    "serve": "firebase serve",
+    "deploy": "firebase deploy --only hosting"
+  },
+  "keywords": [
+    "openapi",
+    "redux",
+    "sdk",
+    "generator",
+    "cli",
+    "api-client"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "commander": "^11.1.0",
+    "handlebars": "^4.7.8",
+    "chalk": "^4.1.2",
+    "fs-extra": "^11.2.0",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.11.5",
+    "typescript": "^5.3.3",
+    "prettier": "^3.2.4",
+    "openapi-types": "^12.1.3"
+  },
+  "peerDependencies": {
+    "@reduxjs/toolkit": "^2.0.0",
+    "react": "^19.0.0",
+    "react-redux": "^9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@reduxjs/toolkit": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-redux": {
+      "optional": true
+    }
+  }
+}

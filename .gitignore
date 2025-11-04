@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.tgz
+output/
+.env
+.env.local
+.firebase/
+.firebaserc.backup
+firebase-debug.log
+ui-debug.log
+functions/lib/
