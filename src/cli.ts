@@ -143,4 +143,108 @@ program
     }
   });
 
+program
+  .command('generate-spring')
+  .description('Generate Spring Boot REST API from OpenAPI spec')
+  .requiredOption('-i, --input <path>', 'Path to OpenAPI specification file')
+  .requiredOption('-o, --output <path>', 'Output directory')
+  .option('-p, --package <name>', 'Java package name', 'com.example.api')
+  .option('-g, --group-id <id>', 'Maven group ID', 'com.example')
+  .option('-a, --artifact-id <id>', 'Maven artifact ID', 'api-service')
+  .option('-v, --version <version>', 'Project version', '1.0.0')
+  .option('--java-version <version>', 'Java version', '21')
+  .option('--spring-boot-version <version>', 'Spring Boot version', '3.2.0')
+  .action(async (options) => {
+    const timer = new PerformanceTimer('Spring Boot Generation');
+
+    try {
+      console.log(chalk.blue('🍃 Generating Spring Boot project...\n'));
+
+      const { generateSpringBoot } = require('./generators/java/spring-boot-generator');
+      const { parseOpenAPISpec } = require('./parser/openapi-parser');
+
+      const inputSpec = path.resolve(options.input);
+      const outputDir = path.resolve(options.output);
+
+      logger.info('Starting Spring Boot generation', { inputSpec, outputDir });
+
+      const parsedAPI = await parseOpenAPISpec(inputSpec);
+
+      await generateSpringBoot(parsedAPI, outputDir, {
+        packageName: options.package,
+        groupId: options.groupId,
+        artifactId: options.artifactId,
+        version: options.version,
+        javaVersion: parseInt(options.javaVersion),
+        springBootVersion: options.springBootVersion,
+      });
+
+      timer.end(true);
+
+      console.log(chalk.green('\n✅ Spring Boot project generated successfully!'));
+      console.log(chalk.gray(`Output directory: ${outputDir}\n`));
+      console.log(chalk.cyan('To run the project:'));
+      console.log(chalk.gray(`  cd ${outputDir}`));
+      console.log(chalk.gray('  mvn spring-boot:run\n'));
+
+      logger.info('Spring Boot generation completed', { duration: timer.elapsed() });
+    } catch (error) {
+      timer.end(false, error as Error);
+      handleError(error as Error);
+    }
+  });
+
+program
+  .command('generate-quarkus')
+  .description('Generate Quarkus REST API from OpenAPI spec')
+  .requiredOption('-i, --input <path>', 'Path to OpenAPI specification file')
+  .requiredOption('-o, --output <path>', 'Output directory')
+  .option('-p, --package <name>', 'Java package name', 'com.example.api')
+  .option('-g, --group-id <id>', 'Maven group ID', 'com.example')
+  .option('-a, --artifact-id <id>', 'Maven artifact ID', 'api-service')
+  .option('-v, --version <version>', 'Project version', '1.0.0')
+  .option('--java-version <version>', 'Java version', '21')
+  .option('--quarkus-version <version>', 'Quarkus version', '3.6.0')
+  .option('--reactive', 'Generate reactive (Mutiny) code', false)
+  .action(async (options) => {
+    const timer = new PerformanceTimer('Quarkus Generation');
+
+    try {
+      console.log(chalk.blue('⚡ Generating Quarkus project...\n'));
+
+      const { generateQuarkus } = require('./generators/java/quarkus-generator');
+      const { parseOpenAPISpec } = require('./parser/openapi-parser');
+
+      const inputSpec = path.resolve(options.input);
+      const outputDir = path.resolve(options.output);
+
+      logger.info('Starting Quarkus generation', { inputSpec, outputDir, reactive: options.reactive });
+
+      const parsedAPI = await parseOpenAPISpec(inputSpec);
+
+      await generateQuarkus(parsedAPI, outputDir, {
+        packageName: options.package,
+        groupId: options.groupId,
+        artifactId: options.artifactId,
+        version: options.version,
+        javaVersion: parseInt(options.javaVersion),
+        quarkusVersion: options.quarkusVersion,
+        reactive: options.reactive,
+      });
+
+      timer.end(true);
+
+      console.log(chalk.green('\n✅ Quarkus project generated successfully!'));
+      console.log(chalk.gray(`Output directory: ${outputDir}\n`));
+      console.log(chalk.cyan('To run the project:'));
+      console.log(chalk.gray(`  cd ${outputDir}`));
+      console.log(chalk.gray('  mvn quarkus:dev\n'));
+
+      logger.info('Quarkus generation completed', { duration: timer.elapsed() });
+    } catch (error) {
+      timer.end(false, error as Error);
+      handleError(error as Error);
+    }
+  });
+
 program.parse();
