@@ -613,6 +613,8 @@ class ReadinessCheck implements HealthCheck {
 }
 
 async function generateMonitoringConfig(outputDir: string, packageName: string): Promise<void> {
+  await ensureDir(outputDir);
+
   const content = `package ${packageName}.config;
 
 import io.micrometer.core.instrument.MeterRegistry;

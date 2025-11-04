@@ -10,7 +10,8 @@
       "Bash(firebase deploy:*)",
       "Bash(firebase projects:list:*)",
       "Bash(npm run build:*)",
-      "Bash(nul)"
+      "Bash(nul)",
+      "Bash(if exist test-fullstack-output rmdir /s /q test-fullstack-output)"
     ],
     "deny": [],
     "ask": []
