@@ -31,9 +31,12 @@
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <span id="fileName">Choose OpenAPI file (YAML or JSON)</span>
-                        <input type="file" id="openApiFile" name="openApiFile" accept=".yaml,.yml,.json" required>
+                        <span id="fileName">Choose OpenAPI file(s) - First file is main spec</span>
+                        <input type="file" id="openApiFile" name="openApiFile" accept=".yaml,.yml,.json" required multiple>
                     </label>
+                    <small style="color: #6b7280; margin-top: -8px;">
+                        💡 Tip: Upload multiple files if your spec uses $ref to reference external files. The first file will be treated as the main specification.
+                    </small>
                 </div>
 
                 <div class="form-row">
@@ -47,6 +50,237 @@
                         <label for="baseURL">Base URL (Optional)</label>
                         <input type="text" id="baseURL" name="baseURL" placeholder="https://api.example.com">
                         <small>Override the base URL from the spec</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>SDK Types to Generate</label>
+                    <div class="sdk-types">
+                        <label class="sdk-type-option">
+                            <input type="checkbox" name="sdkType" value="react" checked>
+                            <span class="sdk-type-label">
+                                <strong>React + Redux SDK</strong>
+                                <small>TypeScript client with RTK Query & Redux Toolkit</small>
+                            </span>
+                        </label>
+                        <label class="sdk-type-option">
+                            <input type="checkbox" name="sdkType" value="spring-boot">
+                            <span class="sdk-type-label">
+                                <strong>Spring Boot Backend</strong>
+                                <small>Java REST API with Spring Boot 3.x</small>
+                            </span>
+                        </label>
+                        <label class="sdk-type-option">
+                            <input type="checkbox" name="sdkType" value="quarkus">
+                            <span class="sdk-type-label">
+                                <strong>Quarkus Backend</strong>
+                                <small>Java REST API with Quarkus 3.x</small>
+                            </span>
+                        </label>
+                        <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
+                            <input type="checkbox" name="sdkType" value="quarkus-fullstack">
+                            <span class="sdk-type-label">
+                                <strong>Quarkus Full Stack ⚡</strong>
+                                <small>Backend + Client SDK with automatic header propagation for inter-service calls</small>
+                            </span>
+                        </label>
+                        <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
+                            <input type="checkbox" name="sdkType" value="spring-boot-client">
+                            <span class="sdk-type-label">
+                                <strong>Spring Boot Client 🔗</strong>
+                                <small>Java client library to call this API from another Spring Boot service</small>
+                            </span>
+                        </label>
+                        <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
+                            <input type="checkbox" name="sdkType" value="quarkus-client">
+                            <span class="sdk-type-label">
+                                <strong>Quarkus Client 🔗</strong>
+                                <small>Java client library to call this API from another Quarkus service</small>
+                            </span>
+                        </label>
+                    </div>
+                    <small style="color: #4F46E5; margin-top: 8px; display: block;">
+                        💡 <strong>New!</strong> Client SDKs generate REST client code for microservice-to-microservice communication
+                    </small>
+                </div>
+
+                <div id="javaOptions" class="java-options hidden">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="packageName">Java Package Name</label>
+                            <input type="text" id="packageName" name="packageName" placeholder="com.example.api">
+                            <small>Base package for generated Java code</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="groupId">Maven Group ID</label>
+                            <input type="text" id="groupId" name="groupId" placeholder="com.example">
+                            <small>Maven project group ID</small>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="artifactId">Maven Artifact ID</label>
+                            <input type="text" id="artifactId" name="artifactId" placeholder="api-service">
+                            <small>Maven project artifact ID</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="javaVersion">Java Version</label>
+                            <select id="javaVersion" name="javaVersion">
+                                <option value="17">Java 17</option>
+                                <option value="21" selected>Java 21</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Spec Configuration (hidden by default) -->
+                <div id="multiSpecConfig" class="multi-spec-config hidden">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;">📋 Specification Manager</h3>
+                        <button type="button" onclick="clearAllSpecs()" class="btn-secondary" style="padding: 8px 16px;">
+                            🗑️ Clear All
+                        </button>
+                    </div>
+                    <p style="color: #6B7280; margin-bottom: 20px;">
+                        Upload multiple OpenAPI specs and configure how they work together. Click an API to set it as the main service.
+                        Files are stored in session storage and will be cleared when you close the browser.
+                    </p>
+
+                    <div class="form-group">
+                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: block;">
+                            📚 Uploaded API Specifications
+                        </label>
+                        <div id="apiList" class="api-list-enhanced">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <small style="color: #6B7280; margin-top: 8px; display: block;">
+                            💡 Click on an API to select it as the main service • ⭐ = Main Service • 🔗 = Client Service
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Header Propagation Configuration</label>
+                        <div id="headerConfig" class="header-config">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <button type="button" id="addCustomHeader" class="btn-secondary">+ Add Custom Header</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: block;">
+                            ⚙️ Business Logic & Transformations
+                        </label>
+                        <p style="color: #6B7280; margin-bottom: 16px; font-size: 0.9rem;">
+                            Configure additional features for your generated service
+                        </p>
+                        <div id="businessLogicConfig" class="business-logic-config">
+                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
+                                <input type="checkbox" id="enableValidation" checked style="margin-right: 12px; margin-top: 3px;">
+                                <div>
+                                    <strong>Request/Response Validation</strong>
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Validate incoming requests and outgoing responses against OpenAPI schema
+                                    </small>
+                                </div>
+                            </label>
+                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
+                                <input type="checkbox" id="enableTransformation" checked style="margin-right: 12px; margin-top: 3px;">
+                                <div>
+                                    <strong>Data Transformation Placeholders</strong>
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Add placeholder methods for transforming data between internal and external formats
+                                    </small>
+                                </div>
+                            </label>
+                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
+                                <input type="checkbox" id="enableEnrichment" style="margin-right: 12px; margin-top: 3px;">
+                                <div>
+                                    <strong>Data Enrichment</strong>
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Add methods to enrich responses with data from external client services
+                                    </small>
+                                </div>
+                            </label>
+                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
+                                <input type="checkbox" id="enableCaching" style="margin-right: 12px; margin-top: 3px;">
+                                <div>
+                                    <strong>Caching Layer</strong>
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Add Redis caching for external API calls to improve performance
+                                    </small>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Spec Aggregator Section -->
+                    <div class="form-group" style="border-top: 2px solid #E5E7EB; padding-top: 24px; margin-top: 24px;">
+                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            🔄 Spec Aggregator
+                            <span style="background: #10B981; color: white; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">NEW</span>
+                        </label>
+                        <p style="color: #6B7280; margin-bottom: 16px; font-size: 0.9rem;">
+                            Create a consolidated OpenAPI spec by merging all uploaded specifications. Useful for creating unified API gateways or combined documentation.
+                        </p>
+                        <div id="aggregatorConfig" class="aggregator-config">
+                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
+                                <input type="checkbox" id="enableAggregator" style="margin-right: 12px; margin-top: 3px;">
+                                <div>
+                                    <strong>Enable Spec Aggregation</strong>
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Merge all specs into a single consolidated OpenAPI specification with smart conflict resolution
+                                    </small>
+                                </div>
+                            </label>
+
+                            <div id="aggregatorOptions" class="hidden" style="margin-left: 36px; padding: 16px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">Aggregated Spec Name</label>
+                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api"
+                                        style="width: 100%; padding: 8px; border: 1px solid #D1D5DB; border-radius: 4px;">
+                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                        Name for the aggregated specification
+                                    </small>
+                                </div>
+
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">Aggregation Output</label>
+                                    <label class="checkbox-label" style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <input type="checkbox" id="downloadAggregatedSpec" checked style="margin-right: 8px;">
+                                        <span>Download aggregated spec file</span>
+                                    </label>
+                                    <label class="checkbox-label" style="display: flex; align-items: center; margin-bottom: 8px;">
+                                        <input type="checkbox" id="generateFromAggregated" checked style="margin-right: 8px;">
+                                        <span>Generate SDKs from aggregated spec</span>
+                                    </label>
+                                    <label class="checkbox-label" style="display: flex; align-items: center;">
+                                        <input type="checkbox" id="showAggregatedPreview" style="margin-right: 8px;">
+                                        <span>Show preview in browser</span>
+                                    </label>
+                                </div>
+
+                                <div style="margin-bottom: 16px;">
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">CO2 Emission Tracking</label>
+                                    <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 8px;">
+                                        <input type="checkbox" id="enableCO2Tracking" style="margin-right: 8px; margin-top: 3px;">
+                                        <div>
+                                            <span>Add CO2 emission annotations</span>
+                                            <small style="display: block; color: #6B7280; margin-top: 4px;">
+                                                Include x-co2-impact extensions and generate tracking code for monitoring API carbon footprint
+                                            </small>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div style="padding: 12px; background: #EEF2FF; border-left: 3px solid #4F46E5; border-radius: 4px; font-size: 0.85rem;">
+                                    <strong>Aggregation Strategy:</strong><br>
+                                    • <strong>Operations:</strong> Merge duplicate paths, combine parameters<br>
+                                    • <strong>Schemas:</strong> Smart merge if compatible, rename if conflicts<br>
+                                    • <strong>Headers:</strong> Union of all unique headers<br>
+                                    • <strong>CO2:</strong> Add sustainability tracking to each endpoint
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -111,6 +345,8 @@
             <p>Made with ❤️ by OpenAPI Redux SDK Generator</p>
             <p>
                 <a href="https://github.com/your-username/openapi-redux-sdk-generator" target="_blank">View on GitHub</a>
+                <span style="margin: 0 10px;">•</span>
+                <a href="https://www.paypal.com/paypalme/acommunitybookshop" target="_blank">Support with a Donation</a>
             </p>
         </footer>
     </div>
