@@ -428,30 +428,7 @@ uploadForm.addEventListener('submit', async (e) => {
 
             // Show preview if requested
             if (showAggregatedPreview) {
-                const specYaml = jsyaml.dump(aggregatedSpec);
-                const previewWindow = window.open('', '_blank');
-                previewWindow.document.write(`
-                    <html>
-                    <head>
-                        <title>Aggregated Spec Preview - ${aggregatedSpecName}</title>
-                        <style>
-                            body { font-family: 'Courier New', monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
-                            pre { white-space: pre-wrap; word-wrap: break-word; }
-                            h1 { color: #4FC3F7; }
-                            .info { background: #2d2d30; padding: 10px; border-left: 3px solid #4FC3F7; margin-bottom: 20px; }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>Aggregated OpenAPI Specification</h1>
-                        <div class="info">
-                            <strong>Name:</strong> ${aggregatedSpecName}<br>
-                            <strong>Source APIs:</strong> ${parsedAPIs.length}<br>
-                            <strong>CO2 Tracking:</strong> ${enableCO2Tracking ? 'Enabled' : 'Disabled'}
-                        </div>
-                        <pre>${specYaml}</pre>
-                    </body>
-                    </html>
-                `);
+                showSpecPreviewModal(aggregatedSpec, aggregatedSpecName, parsedAPIs.length, enableCO2Tracking);
             }
 
             // Use aggregated spec for SDK generation if requested
@@ -665,3 +642,80 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Modal functionality for spec preview
+let currentSpecYaml = '';
+let currentSpecName = '';
+
+function showSpecPreviewModal(spec, name, sourceCount, co2Enabled) {
+    const modal = document.getElementById('specPreviewModal');
+    const infoDiv = document.getElementById('specPreviewInfo');
+    const contentPre = document.getElementById('specPreviewContent');
+
+    currentSpecYaml = jsyaml.dump(spec);
+    currentSpecName = name;
+
+    // Populate info
+    infoDiv.innerHTML = `
+        <strong>Name:</strong> ${name}<br>
+        <strong>Source APIs:</strong> ${sourceCount}<br>
+        <strong>CO2 Tracking:</strong> ${co2Enabled ? 'Enabled ✓' : 'Disabled'}<br>
+        <strong>Paths:</strong> ${Object.keys(spec.paths || {}).length}<br>
+        <strong>Schemas:</strong> ${Object.keys(spec.components?.schemas || {}).length}
+    `;
+
+    // Populate content
+    contentPre.textContent = currentSpecYaml;
+
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+function closeSpecPreviewModal() {
+    const modal = document.getElementById('specPreviewModal');
+    modal.classList.add('hidden');
+}
+
+// Modal event listeners
+document.getElementById('closePreviewModal')?.addEventListener('click', closeSpecPreviewModal);
+
+// Close modal when clicking outside content
+document.getElementById('specPreviewModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeSpecPreviewModal();
+    }
+});
+
+// Copy to clipboard
+document.getElementById('copySpecContent')?.addEventListener('click', function() {
+    navigator.clipboard.writeText(currentSpecYaml).then(() => {
+        const originalText = this.textContent;
+        this.textContent = 'Copied! ✓';
+        setTimeout(() => {
+            this.textContent = originalText;
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+    });
+});
+
+// Download from preview
+document.getElementById('downloadSpecFromPreview')?.addEventListener('click', function() {
+    const blob = new Blob([currentSpecYaml], { type: 'text/yaml' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentSpecName}-aggregated.yaml`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+});
+
+// ESC key to close modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeSpecPreviewModal();
+    }
+});
