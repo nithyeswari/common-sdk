@@ -2203,7 +2203,7 @@ function populateConsolidationsSummary() {
 }
 
 function backToAggregatorConfig() {
-    document.getElementById('aggregationLogicStep').classList.add('hidden');
+    document.getElementById('aggregatorPreviewStep').classList.add('hidden');
     document.getElementById('aggregatorConfigStep').classList.remove('hidden');
     document.getElementById('aggregatorConfigStep').scrollIntoView({ behavior: 'smooth' });
 }
@@ -2296,29 +2296,31 @@ function addAggregatorCustomHeader() {
 }
 
 async function proceedToPreview() {
-    // Generate aggregated spec
+    // Validate consolidations
+    if (consolidationRules.length === 0) {
+        alert('Please create at least one consolidated endpoint (2-to-1) before proceeding');
+        return;
+    }
+
+    // Generate aggregated spec from consolidations
     const generator = new window.SDKGenerator();
-    const aggregatedSpecName = document.getElementById('aggregatedSpecName')?.value || 'unified-api';
-    const enableCO2Tracking = document.getElementById('enableCO2Tracking')?.checked || false;
 
     try {
-        aggregatedSpecPreview = await generator.aggregateSpecs(parsedAPIs, {
-            name: aggregatedSpecName,
-            enableCO2Tracking: enableCO2Tracking,
-            strategy: selectedStrategy,
-            endpointMergeConfig: endpointMergeConfig,
-            payloadMappings: payloadMappings
-        });
+        // Build aggregated spec from consolidation rules
+        aggregatedSpecPreview = await generator.buildAggregatedSpecFromConsolidations(parsedAPIs, consolidationRules, selectedHeaders);
 
-        // Show preview step
-        document.getElementById('specificationManagerStep').classList.add('hidden');
-        document.getElementById('previewStep').classList.remove('hidden');
+        // Hide aggregator config, show preview step
+        document.getElementById('aggregatorConfigStep').classList.add('hidden');
+        document.getElementById('aggregatorPreviewStep').classList.remove('hidden');
+
+        // Populate consolidations summary
+        populateConsolidationsSummary();
 
         // Populate preview
-        populatePreview(aggregatedSpecPreview, aggregatedSpecName, enableCO2Tracking);
+        populateAggregatorPreview(aggregatedSpecPreview);
 
         // Scroll to view
-        document.getElementById('previewStep').scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('aggregatorPreviewStep').scrollIntoView({ behavior: 'smooth' });
     } catch (error) {
         alert('Error generating preview: ' + error.message);
         console.error('Preview error:', error);
@@ -2476,17 +2478,82 @@ function downloadAggregatedSpecNow() {
     alert(`✓ Downloaded: ${specName}-aggregated.yaml`);
 }
 
+function populateAggregatorPreview(spec) {
+    // Populate summary stats
+    const summaryDiv = document.getElementById('previewSummaryAggregator');
+    if (summaryDiv) {
+        const pathCount = Object.keys(spec.paths || {}).length;
+        const schemaCount = Object.keys(spec.components?.schemas || {}).length;
+        const consolidationCount = consolidationRules.filter(r => r.type === '2-to-1-consolidation').length;
+
+        summaryDiv.innerHTML = `
+            <div class="summary-stat">
+                <strong>${consolidationCount}</strong>
+                <span>Consolidated Endpoints</span>
+            </div>
+            <div class="summary-stat">
+                <strong>${pathCount}</strong>
+                <span>Total Paths</span>
+            </div>
+            <div class="summary-stat">
+                <strong>${schemaCount}</strong>
+                <span>Schemas</span>
+            </div>
+            <div class="summary-stat">
+                <strong>${parsedAPIs.length}</strong>
+                <span>Source APIs</span>
+            </div>
+        `;
+    }
+
+    // Set initial tab to summary
+    switchAggregatorPreviewTab('summary');
+}
+
+function switchAggregatorPreviewTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.preview-tab').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase().includes(tab)) {
+            btn.classList.add('active');
+        }
+    });
+
+    const contentDiv = document.getElementById('previewTabContentAggregator');
+    if (!contentDiv) return;
+
+    if (tab === 'summary') {
+        const pathsArray = Object.entries(aggregatedSpecPreview.paths || {});
+        const endpoints = pathsArray.flatMap(([path, methods]) =>
+            Object.keys(methods).map(method => ({ method: method.toUpperCase(), path }))
+        );
+
+        contentDiv.innerHTML = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <h4 style="color: #111827; margin-bottom: 16px;">Consolidated Endpoints</h4>
+                <div style="display: grid; gap: 8px;">
+                    ${endpoints.map(ep => `
+                        <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #10B981;">
+                            <strong style="color: #10B981;">${ep.method}</strong>
+                            <code style="color: #4F46E5;">${ep.path}</code>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } else if (tab === 'yaml') {
+        const yamlContent = jsyaml.dump(aggregatedSpecPreview, { indent: 2, lineWidth: -1 });
+        contentDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${yamlContent}</pre>`;
+    }
+}
+
 function proceedToGeneration() {
     // Download the spec first
     downloadAggregatedSpecNow();
 
-    // Close workflow and trigger SDK generation
-    document.getElementById('previewStep').classList.add('hidden');
+    // Close workflow and show generate button
+    document.getElementById('aggregatorPreviewStep').classList.add('hidden');
 
     // Trigger the main generate button
-    const generateBtn = document.getElementById('generateBtn');
-    if (generateBtn) {
-        // The form submission will handle the rest
-        alert('Spec downloaded! Click "Generate SDK" below to create SDKs from the aggregated specification.');
-    }
+    alert('Spec downloaded! Now scroll down and click "Generate SDK" to create SDKs from the aggregated specification.');
 }

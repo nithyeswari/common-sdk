@@ -20,6 +20,11 @@
             </div>
             <h1>SDK Generator</h1>
             <p class="subtitle">Generate SDKs from your OpenAPI specifications</p>
+            <div class="version-card">
+                <span class="version-label">Version</span>
+                <span class="version-number">2.0.0</span>
+                <span class="version-status">Deployed</span>
+            </div>
         </header>
 
         <!-- Upload Mode Card -->
@@ -277,10 +282,11 @@
                             </div>
                         </div>
 
-                        <button type="button" onclick="proceedToAggregationLogic()" class="btn-primary btn-proceed">
-                            Continue to Aggregation Logic
+                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
+                            Preview Consolidated Spec
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
                             </svg>
                         </button>
                     </div>
@@ -388,13 +394,13 @@
                         </button>
                     </div>
 
-                    <!-- Step 3: Aggregation Logic (only for Aggregator strategy) -->
-                    <div id="aggregationLogicStep" class="workflow-step hidden">
+                    <!-- Step 3: Preview Consolidated Spec (only for Aggregator strategy) -->
+                    <div id="aggregatorPreviewStep" class="workflow-step hidden">
                         <div class="spec-manager-header">
                             <div>
-                                <h3>⚙️ Step 3: Configure Aggregation Logic</h3>
+                                <h3>👁️ Step 3: Preview Consolidated Spec</h3>
                                 <p class="spec-manager-description">
-                                    Review consolidated endpoints and configure how they should execute
+                                    Review the consolidated specification and generate SDKs
                                 </p>
                             </div>
                             <button type="button" onclick="backToAggregatorConfig()" class="btn-back">
@@ -406,171 +412,52 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="section-label">📝 Aggregated Spec Details</label>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="option-label">Spec Name</label>
-                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api" class="input-field">
-                                </div>
-                                <div class="form-group">
-                                    <label class="option-label">Version</label>
-                                    <input type="text" id="aggregatedSpecVersion" placeholder="1.0.0" value="1.0.0" class="input-field">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📋 Consolidated Endpoints Summary</label>
+                            <label class="section-label">📋 Consolidated Endpoints</label>
                             <p class="section-description">
-                                Review the 2-to-1 consolidated endpoints you created
+                                These are the 2-to-1 consolidated endpoints that will be in your new spec
                             </p>
                             <div id="consolidationsSummary" class="consolidations-summary">
                                 <!-- Populated dynamically -->
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label class="section-label">🔗 Header Forwarding Strategy</label>
-                            <p class="section-description">
-                                Configure how headers are forwarded from the consolidated endpoint to the 2 original endpoints
-                            </p>
-                            <div class="header-forwarding-options">
-                                <label class="strategy-option-inline">
-                                    <input type="radio" name="headerForwardingStrategy" value="forward-all" checked>
-                                    <div class="strategy-info-inline">
-                                        <strong>Forward All Headers</strong>
-                                        <small>Pass all incoming headers to both backend endpoints</small>
-                                    </div>
-                                </label>
-                                <label class="strategy-option-inline">
-                                    <input type="radio" name="headerForwardingStrategy" value="forward-selected">
-                                    <div class="strategy-info-inline">
-                                        <strong>Forward Selected Headers Only</strong>
-                                        <small>Only forward headers selected in Step 2</small>
-                                    </div>
-                                </label>
-                                <label class="strategy-option-inline">
-                                    <input type="radio" name="headerForwardingStrategy" value="transform-and-forward">
-                                    <div class="strategy-info-inline">
-                                        <strong>Transform & Forward</strong>
-                                        <small>Transform header values before forwarding (e.g., add prefix, modify format)</small>
-                                    </div>
-                                </label>
+                        <div class="preview-container">
+                            <div class="preview-summary">
+                                <h4>Aggregated Spec Summary</h4>
+                                <div id="previewSummaryAggregator" class="summary-stats">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <div class="preview-content">
+                                <div class="preview-tabs">
+                                    <button class="preview-tab active" onclick="switchPreviewTab('summary')">Summary</button>
+                                    <button class="preview-tab" onclick="switchPreviewTab('yaml')">YAML Preview</button>
+                                </div>
+
+                                <div id="previewTabContentAggregator" class="preview-tab-content">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <div class="preview-actions">
+                                <button type="button" onclick="downloadAggregatedSpecNow()" class="btn-secondary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Download Spec Only
+                                </button>
+                                <button type="button" onclick="proceedToGeneration()" class="btn-primary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="16 18 22 12 16 6"></polyline>
+                                        <polyline points="8 6 2 12 8 18"></polyline>
+                                    </svg>
+                                    Download & Generate SDKs
+                                </button>
                             </div>
                         </div>
-
-                        <div class="form-group">
-                            <label class="section-label">⚙️ Business Logic Configuration</label>
-                            <p class="section-description">
-                                Configure business logic that runs when the consolidated endpoint is called
-                            </p>
-                            <div class="business-logic-config">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicMergeParameters" checked>
-                                    <div>
-                                        <strong>Merge Parameters</strong>
-                                        <small>Combine all parameters from both endpoints into the consolidated endpoint</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicMergeResponses" checked>
-                                    <div>
-                                        <strong>Merge Response Objects</strong>
-                                        <small>Combine response data from both endpoints into a single unified response</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicParallelCalls" checked>
-                                    <div>
-                                        <strong>Execute Calls in Parallel</strong>
-                                        <small>Call both backend endpoints concurrently for better performance (vs sequential)</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicValidateResponses">
-                                    <div>
-                                        <strong>Validate Backend Responses</strong>
-                                        <small>Validate responses from both endpoints against their OpenAPI schemas before merging</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicErrorHandling" checked>
-                                    <div>
-                                        <strong>Graceful Error Handling</strong>
-                                        <small>If one endpoint fails, return partial data from the successful endpoint (vs failing entirely)</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicCaching">
-                                    <div>
-                                        <strong>Response Caching</strong>
-                                        <small>Cache responses from backend endpoints to reduce redundant calls</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicTimeout">
-                                    <div>
-                                        <strong>Timeout Configuration</strong>
-                                        <small>Set timeout limits for backend API calls (default: 30s per endpoint)</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="logicRetry">
-                                    <div>
-                                        <strong>Retry Logic</strong>
-                                        <small>Automatically retry failed backend calls with exponential backoff</small>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">🔧 Code Generation Options</label>
-                            <div class="codegen-options">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="generateOrchestrationCode" checked>
-                                    <div>
-                                        <strong>Generate Orchestration Code</strong>
-                                        <small>Create Java/TypeScript code that implements the consolidation logic</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="generateClientSDKs" checked>
-                                    <div>
-                                        <strong>Generate Client SDKs</strong>
-                                        <small>Create REST client code for calling the 2 backend services</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="enableCO2Tracking">
-                                    <div>
-                                        <strong>CO2 Emission Tracking</strong>
-                                        <small>Add sustainability monitoring to track carbon footprint of API calls</small>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📊 Output Options</label>
-                            <div class="output-options">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="downloadAggregatedSpec" checked>
-                                    <span>Download aggregated OpenAPI spec file</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="generateFromAggregated" checked>
-                                    <span>Generate SDKs from aggregated spec</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
-                            Preview Aggregated Spec
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
                     </div>
 
                     <!-- Remove old spec aggregator section -->
