@@ -46,7 +46,7 @@ export async function generateQuarkusClient(
     await generateClientModels(api, path.join(srcDir, 'model'), options.packageName);
     await generateClientInterfaces(api, path.join(srcDir, 'client'), options.packageName, options.reactive || false);
     await generateClientExceptionMappers(path.join(srcDir, 'exception'), options.packageName);
-    await generateClientFilters(path.join(srcDir, 'filter'), options.packageName);
+    await generateClientFilters(path.join(srcDir, 'filter'), options.packageName, api);
 
     logger.info('Quarkus REST Client SDK generated successfully');
   });
@@ -183,19 +183,23 @@ quarkus.rest-client."${serviceName}".read-timeout=10000
 
 # Header Propagation
 # Automatic header forwarding is enabled via HeaderPropagationFactory
-# The following headers are automatically propagated from incoming requests:
-# - Authorization
-# - X-Correlation-ID
-# - X-Request-ID
-# - X-Trace-ID
-# - X-Tenant-ID
-# - Accept-Language
-# - X-Forwarded-For
-# - X-Forwarded-Proto
-# - X-Forwarded-Host
+# Headers are extracted from the OpenAPI spec and common headers are included by default
 
-# You can also set static headers that will be sent with every request:
+# Option 1: Use default headers (from spec + common headers like Authorization, X-Correlation-ID, etc.)
+# No configuration needed - defaults will be used automatically
+
+# Option 2: Override the complete list of headers to propagate
+# rest-client.propagated-headers=Authorization,X-Correlation-ID,X-Custom-Header
+
+# Option 3: Add additional headers beyond the defaults
+# rest-client.additional-headers=X-Custom-1,X-Custom-2
+
+# Option 4: Exclude specific headers from propagation
+# rest-client.excluded-headers=X-Internal-Only,X-Debug-Info
+
+# Static headers (sent with every request):
 # quarkus.rest-client."${serviceName}".header.X-Custom-Header=custom-value
+# quarkus.rest-client."${serviceName}".header.X-API-Key=your-api-key
 
 # Circuit Breaker
 mp.fault-tolerance.circuitbreaker.enabled=true
@@ -483,9 +487,13 @@ public class ApiClientException extends RuntimeException {
 
 async function generateClientFilters(
   outputDir: string,
-  packageName: string
+  packageName: string,
+  api: ParsedAPI
 ): Promise<void> {
   await ensureDir(outputDir);
+
+  // Extract unique header parameters from all endpoints in the spec
+  const specHeaders = extractHeadersFromSpec(api);
 
   const loggingFilterContent = `package ${packageName}.filter;
 
@@ -515,36 +523,114 @@ public class LoggingFilter implements ClientRequestFilter {
   await writeFile(path.join(outputDir, 'LoggingFilter.java'), loggingFilterContent);
 
   // Generate ClientHeadersFactory for automatic header propagation
-  const headersFactoryContent = `package ${packageName}.filter;
+  const headersFactoryContent = generateHeaderPropagationFactory(packageName, specHeaders);
+
+  await writeFile(path.join(outputDir, 'HeaderPropagationFactory.java'), headersFactoryContent);
+}
+
+// Helper functions
+
+/**
+ * Extract unique header parameters from all endpoints in the OpenAPI spec
+ */
+function extractHeadersFromSpec(api: ParsedAPI): string[] {
+  const headers = new Set<string>();
+
+  // Common headers that should always be propagated
+  const defaultHeaders = [
+    'Authorization',
+    'X-Correlation-ID',
+    'X-Request-ID',
+    'X-Trace-ID',
+    'X-Tenant-ID',
+    'Accept-Language',
+    'X-Forwarded-For',
+    'X-Forwarded-Proto',
+    'X-Forwarded-Host'
+  ];
+
+  // Add default headers
+  defaultHeaders.forEach(h => headers.add(h));
+
+  // Extract headers from endpoint parameters
+  for (const endpoint of api.endpoints) {
+    const headerParams = endpoint.parameters?.filter(p => p.in === 'header') || [];
+    headerParams.forEach(param => {
+      // Add header name if it's not already a standard JAX-RS header
+      if (!['Content-Type', 'Accept', 'User-Agent'].includes(param.name)) {
+        headers.add(param.name);
+      }
+    });
+  }
+
+  return Array.from(headers).sort();
+}
+
+/**
+ * Generate HeaderPropagationFactory with spec-based headers and configuration support
+ */
+function generateHeaderPropagationFactory(packageName: string, specHeaders: string[]): string {
+  // Generate Java string array elements with proper indentation
+  const headersArray = specHeaders.map(h => `        "${h}"`).join(',\n');
+
+  return `package ${packageName}.filter;
 
 import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * Automatic header propagation for REST client
  * Forwards headers from incoming request to outgoing REST client calls
+ *
+ * Features:
+ * - Extracts headers from OpenAPI spec automatically
+ * - Configurable via application.properties
+ * - Supports adding/removing headers without code changes
+ *
+ * Configuration:
+ * - rest-client.propagated-headers: Comma-separated list of headers to propagate
+ * - rest-client.additional-headers: Additional headers to propagate beyond defaults
+ * - rest-client.excluded-headers: Headers to exclude from propagation
  */
 @ApplicationScoped
 @Slf4j
 public class HeaderPropagationFactory implements ClientHeadersFactory {
 
     /**
-     * Headers to automatically propagate from incoming requests
+     * Default headers to propagate (extracted from OpenAPI spec + common headers)
+     * Can be overridden via rest-client.propagated-headers configuration
      */
-    private static final String[] PROPAGATED_HEADERS = {
-        "Authorization",
-        "X-Correlation-ID",
-        "X-Request-ID",
-        "X-Trace-ID",
-        "X-Tenant-ID",
-        "Accept-Language",
-        "X-Forwarded-For",
-        "X-Forwarded-Proto",
-        "X-Forwarded-Host"
+    private static final String[] DEFAULT_PROPAGATED_HEADERS = {
+${headersArray}
     };
+
+    /**
+     * Override the default header list completely
+     * Example: rest-client.propagated-headers=Authorization,X-Custom-Header
+     */
+    @ConfigProperty(name = "rest-client.propagated-headers")
+    java.util.Optional<List<String>> configuredHeaders;
+
+    /**
+     * Additional headers to propagate beyond defaults
+     * Example: rest-client.additional-headers=X-Custom-1,X-Custom-2
+     */
+    @ConfigProperty(name = "rest-client.additional-headers")
+    java.util.Optional<List<String>> additionalHeaders;
+
+    /**
+     * Headers to exclude from propagation
+     * Example: rest-client.excluded-headers=X-Internal-Only
+     */
+    @ConfigProperty(name = "rest-client.excluded-headers")
+    java.util.Optional<List<String>> excludedHeaders;
 
     @Override
     public MultivaluedMap<String, String> update(
@@ -553,31 +639,85 @@ public class HeaderPropagationFactory implements ClientHeadersFactory {
 
         MultivaluedMap<String, String> headers = new MultivaluedHashMap<>();
 
-        // Copy all existing outgoing headers
-        headers.putAll(clientOutgoingHeaders);
+        // Copy all existing outgoing headers (from @HeaderParam, static config, etc.)
+        if (clientOutgoingHeaders != null) {
+            headers.putAll(clientOutgoingHeaders);
+        }
 
-        // Propagate specific headers from incoming request
-        if (incomingHeaders != null) {
-            for (String headerName : PROPAGATED_HEADERS) {
+        // Determine which headers to propagate
+        List<String> headersTopropagate = getHeadersTopropagate();
+
+        // Propagate headers from incoming request
+        if (incomingHeaders != null && !incomingHeaders.isEmpty()) {
+            for (String headerName : headersTopropagate) {
                 if (incomingHeaders.containsKey(headerName)) {
                     String value = incomingHeaders.getFirst(headerName);
                     if (value != null && !value.isEmpty()) {
                         headers.putSingle(headerName, value);
-                        log.debug("Propagating header: {} = {}", headerName, value);
+                        log.debug("Propagating header: {} = {}", headerName, maskSensitiveValue(headerName, value));
                     }
                 }
             }
+        } else {
+            log.debug("No incoming headers to propagate (non-JAX-RS context or initial request)");
         }
 
         return headers;
     }
+
+    /**
+     * Determine the final list of headers to propagate based on configuration
+     */
+    private List<String> getHeadersTopropagate() {
+        List<String> headers;
+
+        // If custom headers are configured, use them instead of defaults
+        if (configuredHeaders.isPresent() && !configuredHeaders.get().isEmpty()) {
+            headers = configuredHeaders.get().stream()
+                .map(String::trim)
+                .collect(Collectors.toList());
+            log.debug("Using configured headers: {}", headers);
+        } else {
+            // Use default headers from spec
+            headers = Arrays.stream(DEFAULT_PROPAGATED_HEADERS)
+                .collect(Collectors.toList());
+        }
+
+        // Add any additional headers
+        if (additionalHeaders.isPresent() && !additionalHeaders.get().isEmpty()) {
+            List<String> additional = additionalHeaders.get().stream()
+                .map(String::trim)
+                .collect(Collectors.toList());
+            headers.addAll(additional);
+            log.debug("Added additional headers: {}", additional);
+        }
+
+        // Remove excluded headers
+        if (excludedHeaders.isPresent() && !excludedHeaders.get().isEmpty()) {
+            List<String> excluded = excludedHeaders.get().stream()
+                .map(String::trim)
+                .collect(Collectors.toList());
+            headers.removeAll(excluded);
+            log.debug("Excluded headers: {}", excluded);
+        }
+
+        return headers;
+    }
+
+    /**
+     * Mask sensitive header values for logging
+     */
+    private String maskSensitiveValue(String headerName, String value) {
+        if (headerName.equalsIgnoreCase("Authorization") ||
+            headerName.toLowerCase().contains("token") ||
+            headerName.toLowerCase().contains("key")) {
+            return value.substring(0, Math.min(20, value.length())) + "...";
+        }
+        return value;
+    }
 }
 `;
-
-  await writeFile(path.join(outputDir, 'HeaderPropagationFactory.java'), headersFactoryContent);
 }
-
-// Helper functions
 
 function groupEndpointsByTag(endpoints: Endpoint[]): Record<string, Endpoint[]> {
   const grouped: Record<string, Endpoint[]> = {};

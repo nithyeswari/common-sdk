@@ -22,7 +22,27 @@
             <p class="subtitle">Generate type-safe Redux SDKs from your OpenAPI specifications</p>
         </header>
 
-        <div class="card">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button id="uploadModeBtn" class="mode-btn active">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload Spec
+            </button>
+            <button id="createModeBtn" class="mode-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Create Spec
+            </button>
+        </div>
+
+        <!-- Upload Mode Card -->
+        <div class="card" id="uploadModeCard">
             <form id="uploadForm" class="upload-form">
                 <div class="form-group">
                     <label for="openApiFile" class="file-label">
@@ -135,42 +155,66 @@
 
                 <!-- Multi-Spec Configuration (hidden by default) -->
                 <div id="multiSpecConfig" class="multi-spec-config hidden">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="margin: 0;">📋 Specification Manager</h3>
-                        <button type="button" onclick="clearAllSpecs()" class="btn-secondary" style="padding: 8px 16px;">
-                            🗑️ Clear All
+                    <div class="spec-manager-header">
+                        <div>
+                            <h3>📋 Specification Manager</h3>
+                            <p class="spec-manager-description">
+                                Manage multiple OpenAPI specs and configure how they work together. Click an API to set it as the main service.
+                            </p>
+                        </div>
+                        <button type="button" onclick="clearAllSpecs()" class="btn-clear-specs">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Clear All
                         </button>
                     </div>
-                    <p style="color: #6B7280; margin-bottom: 20px;">
-                        Upload multiple OpenAPI specs and configure how they work together. Click an API to set it as the main service.
-                        Files are stored in session storage and will be cleared when you close the browser.
-                    </p>
 
                     <div class="form-group">
-                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: block;">
-                            📚 Uploaded API Specifications
-                        </label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <label class="section-label" style="margin-bottom: 0;">
+                                📚 Uploaded API Specifications
+                            </label>
+                            <button type="button" id="createMainFromClients" class="btn-create-main">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path d="M12 5v14M5 12h14"></path>
+                                </svg>
+                                Create Main from Clients
+                            </button>
+                        </div>
                         <div id="apiList" class="api-list-enhanced">
                             <!-- Populated dynamically -->
                         </div>
-                        <small style="color: #6B7280; margin-top: 8px; display: block;">
+                        <div class="helper-text">
                             💡 Click on an API to select it as the main service • ⭐ = Main Service • 🔗 = Client Service
-                        </small>
+                        </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Header Propagation Configuration</label>
+                        <label class="section-label">
+                            🔗 Header Propagation Configuration
+                        </label>
+                        <p class="section-description">
+                            Configure which headers should be automatically propagated from incoming requests to client API calls.
+                        </p>
                         <div id="headerConfig" class="header-config">
                             <!-- Populated dynamically -->
                         </div>
-                        <button type="button" id="addCustomHeader" class="btn-secondary">+ Add Custom Header</button>
+                        <button type="button" id="addCustomHeader" class="btn-add-header">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Custom Header
+                        </button>
                     </div>
 
                     <div class="form-group">
-                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: block;">
+                        <label class="section-label">
                             ⚙️ Business Logic & Transformations
                         </label>
-                        <p style="color: #6B7280; margin-bottom: 16px; font-size: 0.9rem;">
+                        <p class="section-description">
                             Configure additional features for your generated service
                         </p>
                         <div id="businessLogicConfig" class="business-logic-config">
@@ -214,12 +258,12 @@
                     </div>
 
                     <!-- Spec Aggregator Section -->
-                    <div class="form-group" style="border-top: 2px solid #E5E7EB; padding-top: 24px; margin-top: 24px;">
-                        <label style="font-weight: 600; font-size: 1.1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                    <div class="form-group aggregator-section">
+                        <label class="section-label">
                             🔄 Spec Aggregator
-                            <span style="background: #10B981; color: white; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">NEW</span>
+                            <span class="badge-new">NEW</span>
                         </label>
-                        <p style="color: #6B7280; margin-bottom: 16px; font-size: 0.9rem;">
+                        <p class="section-description">
                             Create a consolidated OpenAPI spec by merging all uploaded specifications. Useful for creating unified API gateways or combined documentation.
                         </p>
                         <div id="aggregatorConfig" class="aggregator-config">
@@ -233,14 +277,47 @@
                                 </div>
                             </label>
 
-                            <div id="aggregatorOptions" class="hidden" style="margin-left: 36px; padding: 16px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">Aggregated Spec Name</label>
-                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api"
-                                        style="width: 100%; padding: 8px; border: 1px solid #D1D5DB; border-radius: 4px;">
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
+                            <div id="aggregatorOptions" class="hidden aggregator-options-container">
+                                <div class="form-section">
+                                    <label class="option-label">Aggregated Spec Name</label>
+                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api" class="input-field">
+                                    <small class="input-hint">
                                         Name for the aggregated specification
                                     </small>
+                                </div>
+
+                                <div class="form-section">
+                                    <label class="option-label">Endpoint Merging Strategy</label>
+                                    <p class="section-description" style="margin-bottom: 12px;">
+                                        Configure how duplicate paths across specs should be merged
+                                    </p>
+                                    <div id="endpointMergeList" class="endpoint-merge-list">
+                                        <!-- Populated dynamically with duplicate paths -->
+                                    </div>
+                                    <button type="button" id="scanForDuplicates" class="btn-scan">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <circle cx="11" cy="11" r="8"></circle>
+                                            <path d="m21 21-4.35-4.35"></path>
+                                        </svg>
+                                        Scan for Duplicate Endpoints
+                                    </button>
+                                </div>
+
+                                <div class="form-section">
+                                    <label class="option-label">Payload Mapping</label>
+                                    <p class="section-description" style="margin-bottom: 12px;">
+                                        Map fields between different API schemas
+                                    </p>
+                                    <div id="payloadMappingList" class="payload-mapping-list">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                    <button type="button" id="addPayloadMapping" class="btn-scan">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        Add Payload Mapping
+                                    </button>
                                 </div>
 
                                 <div style="margin-bottom: 16px;">
@@ -318,6 +395,115 @@
             </div>
         </div>
 
+        <!-- Create Mode Card -->
+        <div class="card hidden" id="createModeCard">
+            <form id="specBuilderForm" class="spec-builder-form">
+                <div class="builder-header">
+                    <h2>🛠️ OpenAPI Spec Builder</h2>
+                    <p>Create a new OpenAPI specification from scratch</p>
+                </div>
+
+                <!-- Basic Information -->
+                <div class="builder-section">
+                    <h3>📋 Basic Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>API Title</label>
+                            <input type="text" id="specTitle" placeholder="My API" required>
+                            <small>Name of your API</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Version</label>
+                            <input type="text" id="specVersion" placeholder="1.0.0" value="1.0.0" required>
+                            <small>API version</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="specDescription" rows="3" placeholder="A comprehensive API for..."></textarea>
+                        <small>Brief description of your API</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Base URL</label>
+                            <input type="text" id="specBaseUrl" placeholder="https://api.example.com/v1">
+                            <small>Server base URL</small>
+                        </div>
+                        <div class="form-group">
+                            <label>OpenAPI Version</label>
+                            <select id="specOpenAPIVersion">
+                                <option value="3.0.0">OpenAPI 3.0.0</option>
+                                <option value="3.0.1">OpenAPI 3.0.1</option>
+                                <option value="3.1.0" selected>OpenAPI 3.1.0</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schemas/Models -->
+                <div class="builder-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>📦 Schemas/Models</h3>
+                        <button type="button" id="addSchema" class="btn-add">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Schema
+                        </button>
+                    </div>
+                    <div id="schemasList" class="schemas-list">
+                        <div class="empty-state">No schemas added yet. Click "Add Schema" to create one.</div>
+                    </div>
+                </div>
+
+                <!-- Endpoints -->
+                <div class="builder-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3>🌐 Endpoints</h3>
+                        <button type="button" id="addEndpoint" class="btn-add">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Endpoint
+                        </button>
+                    </div>
+                    <div id="endpointsList" class="endpoints-list">
+                        <div class="empty-state">No endpoints added yet. Click "Add Endpoint" to create one.</div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="builder-actions">
+                    <button type="button" id="previewSpec" class="btn-secondary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        Preview YAML
+                    </button>
+                    <button type="button" id="downloadSpec" class="btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download YAML
+                    </button>
+                    <button type="button" id="generateFromCreated" class="btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        Generate SDK
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- Spec Preview Modal -->
         <div id="specPreviewModal" class="modal hidden">
             <div class="modal-content">
@@ -371,5 +557,6 @@
 
     <script src="generator.js"></script>
     <script src="app.js"></script>
+    <script src="spec-builder.js"></script>
 </body>
 </html>
