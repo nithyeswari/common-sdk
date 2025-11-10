@@ -51,6 +51,8 @@ let selectedHeaders = {};
 let mainAPIIndex = 0;
 let endpointMergeConfig = {}; // { path: { method: 'merge'|'keep-first'|'keep-all', sourceSpecs: [...] } }
 let payloadMappings = []; // [{ sourceSpec, targetSpec, sourceField, targetField, transformFn }]
+let selectedStrategy = 'merge-all';
+let aggregatedSpecPreview = null;
 
 // SessionStorage keys
 const STORAGE_KEYS = {
@@ -2047,4 +2049,236 @@ function closeMainServiceModal() {
 function closeSuccessModal() {
     const modal = document.getElementById('successModal');
     if (modal) modal.remove();
+}
+
+// Workflow Navigation Functions
+function proceedToSpecManager() {
+    const strategy = document.querySelector('input[name="aggregationStrategy"]:checked')?.value;
+    selectedStrategy = strategy || 'merge-all';
+
+    // Hide strategy step, show spec manager step
+    document.getElementById('aggregationStrategyStep').classList.add('hidden');
+    document.getElementById('specificationManagerStep').classList.remove('hidden');
+
+    // Configure UI based on selected strategy
+    if (strategy === 'merge-all') {
+        // Hide advanced options for auto-merge
+        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.add('hidden');
+        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.add('hidden');
+    } else if (strategy === 'manual-config') {
+        // Show all configuration options
+        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.remove('hidden');
+        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.remove('hidden');
+        // Auto-scan for duplicates
+        scanForDuplicateEndpoints();
+    } else if (strategy === 'main-plus-clients') {
+        // Show client/main configuration
+        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.add('hidden');
+        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.add('hidden');
+    }
+
+    // Scroll to view
+    document.getElementById('specificationManagerStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function backToStrategy() {
+    document.getElementById('specificationManagerStep').classList.add('hidden');
+    document.getElementById('aggregationStrategyStep').classList.remove('hidden');
+    document.getElementById('aggregationStrategyStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function proceedToPreview() {
+    // Generate aggregated spec
+    const generator = new window.SDKGenerator();
+    const aggregatedSpecName = document.getElementById('aggregatedSpecName')?.value || 'unified-api';
+    const enableCO2Tracking = document.getElementById('enableCO2Tracking')?.checked || false;
+
+    try {
+        aggregatedSpecPreview = await generator.aggregateSpecs(parsedAPIs, {
+            name: aggregatedSpecName,
+            enableCO2Tracking: enableCO2Tracking,
+            strategy: selectedStrategy,
+            endpointMergeConfig: endpointMergeConfig,
+            payloadMappings: payloadMappings
+        });
+
+        // Show preview step
+        document.getElementById('specificationManagerStep').classList.add('hidden');
+        document.getElementById('previewStep').classList.remove('hidden');
+
+        // Populate preview
+        populatePreview(aggregatedSpecPreview, aggregatedSpecName, enableCO2Tracking);
+
+        // Scroll to view
+        document.getElementById('previewStep').scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+        alert('Error generating preview: ' + error.message);
+        console.error('Preview error:', error);
+    }
+}
+
+function backToSpecManager() {
+    document.getElementById('previewStep').classList.add('hidden');
+    document.getElementById('specificationManagerStep').classList.remove('hidden');
+    document.getElementById('specificationManagerStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function populatePreview(spec, specName, co2Enabled) {
+    // Populate summary stats
+    const summaryDiv = document.getElementById('previewSummary');
+    const pathCount = Object.keys(spec.paths || {}).length;
+    const schemaCount = Object.keys(spec.components?.schemas || {}).length;
+    const sourceCount = spec.info?.['x-aggregated-from']?.length || parsedAPIs.length;
+
+    summaryDiv.innerHTML = `
+        <div class="summary-stat">
+            <strong>${sourceCount}</strong>
+            <span>Source APIs</span>
+        </div>
+        <div class="summary-stat">
+            <strong>${pathCount}</strong>
+            <span>Total Endpoints</span>
+        </div>
+        <div class="summary-stat">
+            <strong>${schemaCount}</strong>
+            <span>Schemas</span>
+        </div>
+        <div class="summary-stat">
+            <strong>${selectedStrategy === 'merge-all' ? 'Auto' : 'Manual'}</strong>
+            <span>Merge Strategy</span>
+        </div>
+    `;
+
+    // Set initial tab to summary
+    switchPreviewTab('summary');
+}
+
+function switchPreviewTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.preview-tab').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase().includes(tab)) {
+            btn.classList.add('active');
+        }
+    });
+
+    const contentDiv = document.getElementById('previewTabContent');
+
+    if (tab === 'summary') {
+        const pathsArray = Object.entries(aggregatedSpecPreview.paths || {});
+        const endpoints = pathsArray.flatMap(([path, methods]) =>
+            Object.keys(methods).map(method => ({ method: method.toUpperCase(), path }))
+        );
+
+        contentDiv.innerHTML = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <h4 style="color: #111827; margin-bottom: 16px;">Endpoints Summary</h4>
+                <div style="display: grid; gap: 8px;">
+                    ${endpoints.map(ep => `
+                        <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #4F46E5;">
+                            <strong style="color: #10B981;">${ep.method}</strong>
+                            <code style="color: #4F46E5;">${ep.path}</code>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    } else if (tab === 'yaml') {
+        const yamlContent = jsyaml.dump(aggregatedSpecPreview, { indent: 2, lineWidth: -1 });
+        contentDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${yamlContent}</pre>`;
+    } else if (tab === 'changes') {
+        const changes = analyzeChanges();
+        contentDiv.innerHTML = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <h4 style="color: #111827; margin-bottom: 16px;">Changes & Merges</h4>
+                <ul class="changes-list">
+                    ${changes.map(change => `
+                        <li class="${change.type}">
+                            <strong>${change.title}</strong>
+                            <p style="margin: 4px 0 0 0; color: #6B7280; font-size: 0.9rem;">${change.description}</p>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }
+}
+
+function analyzeChanges() {
+    const changes = [];
+
+    // Count merged endpoints
+    const mergedCount = Object.keys(endpointMergeConfig).length;
+    if (mergedCount > 0) {
+        changes.push({
+            type: 'info',
+            title: `${mergedCount} Endpoints Configured`,
+            description: `Custom merge strategies applied to ${mergedCount} duplicate endpoints`
+        });
+    }
+
+    // Count source specs
+    changes.push({
+        type: 'success',
+        title: `Merged ${parsedAPIs.length} Specifications`,
+        description: `Combined ${parsedAPIs.map(api => api.title || api.fileName).join(', ')}`
+    });
+
+    // Check for consolidations
+    const consolidations = consolidationRules.filter(r => r.type === '2-to-1-consolidation');
+    if (consolidations.length > 0) {
+        changes.push({
+            type: 'info',
+            title: `${consolidations.length} Path Consolidations`,
+            description: `Created ${consolidations.length} new consolidated endpoints (2→1)`
+        });
+    }
+
+    // Payload mappings
+    if (payloadMappings.length > 0) {
+        changes.push({
+            type: 'info',
+            title: `${payloadMappings.length} Payload Mappings`,
+            description: `Configured field transformations between services`
+        });
+    }
+
+    return changes;
+}
+
+function downloadAggregatedSpecNow() {
+    if (!aggregatedSpecPreview) {
+        alert('No aggregated spec available');
+        return;
+    }
+
+    const specName = document.getElementById('aggregatedSpecName')?.value || 'unified-api';
+    const yaml = jsyaml.dump(aggregatedSpecPreview, { indent: 2 });
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${specName}-aggregated.yaml`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    // Show notification
+    alert(`✓ Downloaded: ${specName}-aggregated.yaml`);
+}
+
+function proceedToGeneration() {
+    // Download the spec first
+    downloadAggregatedSpecNow();
+
+    // Close workflow and trigger SDK generation
+    document.getElementById('previewStep').classList.add('hidden');
+
+    // Trigger the main generate button
+    const generateBtn = document.getElementById('generateBtn');
+    if (generateBtn) {
+        // The form submission will handle the rest
+        alert('Spec downloaded! Click "Generate SDK" below to create SDKs from the aggregated specification.');
+    }
 }

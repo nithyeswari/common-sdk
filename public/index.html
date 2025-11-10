@@ -155,21 +155,92 @@
 
                 <!-- Multi-Spec Configuration (hidden by default) -->
                 <div id="multiSpecConfig" class="multi-spec-config hidden">
-                    <div class="spec-manager-header">
-                        <div>
-                            <h3>📋 Specification Manager</h3>
-                            <p class="spec-manager-description">
-                                Manage multiple OpenAPI specs and configure how they work together. Click an API to set it as the main service.
-                            </p>
+                    <!-- Step 1: Choose Aggregation Strategy -->
+                    <div id="aggregationStrategyStep" class="workflow-step">
+                        <div class="spec-manager-header">
+                            <div>
+                                <h3>🎯 Step 1: Choose Aggregation Strategy</h3>
+                                <p class="spec-manager-description">
+                                    Select how you want to combine your specifications
+                                </p>
+                            </div>
+                            <button type="button" onclick="clearAllSpecs()" class="btn-clear-specs">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                Clear All
+                            </button>
                         </div>
-                        <button type="button" onclick="clearAllSpecs()" class="btn-clear-specs">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+
+                        <div class="strategy-selection">
+                            <label class="strategy-card">
+                                <input type="radio" name="aggregationStrategy" value="merge-all" checked>
+                                <div class="strategy-content">
+                                    <div class="strategy-icon">🔄</div>
+                                    <h4>Auto-Merge All Specs</h4>
+                                    <p>Automatically merge all specs with smart conflict resolution. Duplicate endpoints will be intelligently combined.</p>
+                                    <div class="strategy-features">
+                                        <span>✓ Smart merging</span>
+                                        <span>✓ Parameter consolidation</span>
+                                        <span>✓ Schema compatibility</span>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="strategy-card">
+                                <input type="radio" name="aggregationStrategy" value="manual-config">
+                                <div class="strategy-content">
+                                    <div class="strategy-icon">⚙️</div>
+                                    <h4>Manual Configuration</h4>
+                                    <p>Configure exactly how each endpoint should be handled. Full control over merging, consolidation, and payload mapping.</p>
+                                    <div class="strategy-features">
+                                        <span>✓ Full control</span>
+                                        <span>✓ Custom merging</span>
+                                        <span>✓ 2-to-1 consolidation</span>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="strategy-card">
+                                <input type="radio" name="aggregationStrategy" value="main-plus-clients">
+                                <div class="strategy-content">
+                                    <div class="strategy-icon">🏗️</div>
+                                    <h4>Main Service + Clients</h4>
+                                    <p>Create a main gateway service that orchestrates calls to client services. Perfect for microservice architectures.</p>
+                                    <div class="strategy-features">
+                                        <span>✓ Gateway pattern</span>
+                                        <span>✓ Header propagation</span>
+                                        <span>✓ Client orchestration</span>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <button type="button" onclick="proceedToSpecManager()" class="btn-primary btn-proceed">
+                            Continue to Spec Manager
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
-                            Clear All
                         </button>
                     </div>
+
+                    <!-- Step 2: Specification Manager -->
+                    <div id="specificationManagerStep" class="workflow-step hidden">
+                        <div class="spec-manager-header">
+                            <div>
+                                <h3>📋 Step 2: Configure Specifications</h3>
+                                <p class="spec-manager-description">
+                                    Manage your specifications and configure merging details
+                                </p>
+                            </div>
+                            <button type="button" onclick="backToStrategy()" class="btn-back">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Back
+                            </button>
+                        </div>
 
                     <div class="form-group">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -356,6 +427,71 @@
                                     • <strong>Headers:</strong> Union of all unique headers<br>
                                     • <strong>CO2:</strong> Add sustainability tracking to each endpoint
                                 </div>
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
+                            Preview Aggregated Spec
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                    <!-- Step 3: Preview & Download -->
+                    <div id="previewStep" class="workflow-step hidden">
+                        <div class="spec-manager-header">
+                            <div>
+                                <h3>👁️ Step 3: Preview & Download</h3>
+                                <p class="spec-manager-description">
+                                    Review the aggregated specification before downloading or generating SDKs
+                                </p>
+                            </div>
+                            <button type="button" onclick="backToSpecManager()" class="btn-back">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Back
+                            </button>
+                        </div>
+
+                        <div class="preview-container">
+                            <div class="preview-summary">
+                                <h4>Aggregation Summary</h4>
+                                <div id="previewSummary" class="summary-stats">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <div class="preview-content">
+                                <div class="preview-tabs">
+                                    <button class="preview-tab active" onclick="switchPreviewTab('summary')">Summary</button>
+                                    <button class="preview-tab" onclick="switchPreviewTab('yaml')">YAML Preview</button>
+                                    <button class="preview-tab" onclick="switchPreviewTab('changes')">Changes</button>
+                                </div>
+
+                                <div id="previewTabContent" class="preview-tab-content">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <div class="preview-actions">
+                                <button type="button" onclick="downloadAggregatedSpecNow()" class="btn-secondary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    Download Spec Only
+                                </button>
+                                <button type="button" onclick="proceedToGeneration()" class="btn-primary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="16 18 22 12 16 6"></polyline>
+                                        <polyline points="8 6 2 12 8 18"></polyline>
+                                    </svg>
+                                    Download & Generate SDKs
+                                </button>
                             </div>
                         </div>
                     </div>
