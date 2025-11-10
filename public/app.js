@@ -2302,12 +2302,9 @@ async function proceedToPreview() {
         return;
     }
 
-    // Generate aggregated spec from consolidations
-    const generator = new window.SDKGenerator();
-
     try {
-        // Build aggregated spec from consolidation rules
-        aggregatedSpecPreview = await generator.buildAggregatedSpecFromConsolidations(parsedAPIs, consolidationRules, selectedHeaders);
+        // Build aggregated spec directly from consolidation rules
+        aggregatedSpecPreview = buildConsolidatedSpec();
 
         // Hide aggregator config, show preview step
         document.getElementById('aggregatorConfigStep').classList.add('hidden');
@@ -2325,6 +2322,115 @@ async function proceedToPreview() {
         alert('Error generating preview: ' + error.message);
         console.error('Preview error:', error);
     }
+}
+
+function buildConsolidatedSpec() {
+    const consolidations = consolidationRules.filter(r => r.type === '2-to-1-consolidation');
+
+    // Create base spec
+    const spec = {
+        openapi: '3.0.0',
+        info: {
+            title: 'Consolidated API',
+            version: '1.0.0',
+            description: 'Aggregated API specification created from multiple sources',
+            'x-consolidations': consolidations.length,
+            'x-source-apis': parsedAPIs.map(api => api.title || api.fileName)
+        },
+        servers: [],
+        paths: {},
+        components: {
+            schemas: {},
+            securitySchemes: {}
+        }
+    };
+
+    // Add paths from consolidations
+    consolidations.forEach(consolidation => {
+        const path = consolidation.path;
+        const method = consolidation.method.toLowerCase();
+
+        if (!spec.paths[path]) {
+            spec.paths[path] = {};
+        }
+
+        // Build consolidated operation
+        const operation = {
+            summary: consolidation.summary || `Consolidated endpoint combining data from ${consolidation.endpoint1.api} and ${consolidation.endpoint2.api}`,
+            description: `This endpoint calls both:\n- ${consolidation.endpoint1.operation.method.toUpperCase()} ${consolidation.endpoint1.operation.path} (${consolidation.endpoint1.api})\n- ${consolidation.endpoint2.operation.method.toUpperCase()} ${consolidation.endpoint2.operation.path} (${consolidation.endpoint2.api})\n\nAnd merges their responses into a unified result.`,
+            operationId: consolidation.operationId || `consolidated_${method}_${path.replace(/\//g, '_').replace(/[{}]/g, '')}`,
+            'x-consolidation': {
+                type: '2-to-1',
+                sources: [
+                    {
+                        api: consolidation.endpoint1.api,
+                        method: consolidation.endpoint1.operation.method,
+                        path: consolidation.endpoint1.operation.path
+                    },
+                    {
+                        api: consolidation.endpoint2.api,
+                        method: consolidation.endpoint2.operation.method,
+                        path: consolidation.endpoint2.operation.path
+                    }
+                ],
+                rules: consolidation.rules
+            },
+            parameters: consolidation.mergedParameters || [],
+            responses: {
+                '200': {
+                    description: 'Successful consolidated response',
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    data: {
+                                        type: 'object',
+                                        description: 'Merged data from both endpoints'
+                                    },
+                                    sources: {
+                                        type: 'array',
+                                        items: {
+                                            type: 'string'
+                                        },
+                                        description: 'Source APIs that provided data'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                '500': {
+                    description: 'Error from backend services'
+                }
+            }
+        };
+
+        spec.paths[path][method] = operation;
+    });
+
+    // Add servers from original specs
+    const allServers = new Set();
+    parsedAPIs.forEach(api => {
+        if (api.spec.servers) {
+            api.spec.servers.forEach(server => {
+                allServers.add(JSON.stringify(server));
+            });
+        }
+    });
+    spec.servers = Array.from(allServers).map(s => JSON.parse(s));
+
+    // Add schemas from original specs
+    parsedAPIs.forEach(api => {
+        if (api.spec.components?.schemas) {
+            Object.entries(api.spec.components.schemas).forEach(([schemaName, schema]) => {
+                const prefixedName = `${api.title || 'api'}_${schemaName}`;
+                spec.components.schemas[prefixedName] = schema;
+            });
+        }
+    });
+
+    return spec;
 }
 
 function backToSpecManager() {
