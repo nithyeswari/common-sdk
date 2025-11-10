@@ -2412,24 +2412,34 @@ function buildConsolidatedSpec() {
     // Add servers from original specs
     const allServers = new Set();
     parsedAPIs.forEach(api => {
-        if (api.spec.servers) {
-            api.spec.servers.forEach(server => {
+        const apiSpec = api.spec || api;
+        if (apiSpec && apiSpec.servers && Array.isArray(apiSpec.servers)) {
+            apiSpec.servers.forEach(server => {
                 allServers.add(JSON.stringify(server));
             });
         }
     });
-    spec.servers = Array.from(allServers).map(s => JSON.parse(s));
+
+    if (allServers.size === 0) {
+        // Add a default server if none found
+        spec.servers = [{ url: 'https://api.example.com' }];
+    } else {
+        spec.servers = Array.from(allServers).map(s => JSON.parse(s));
+    }
 
     // Add schemas from original specs
     parsedAPIs.forEach(api => {
-        if (api.spec.components?.schemas) {
-            Object.entries(api.spec.components.schemas).forEach(([schemaName, schema]) => {
+        const apiSpec = api.spec || api;
+        if (apiSpec && apiSpec.components?.schemas) {
+            Object.entries(apiSpec.components.schemas).forEach(([schemaName, schema]) => {
                 const prefixedName = `${api.title || 'api'}_${schemaName}`;
                 spec.components.schemas[prefixedName] = schema;
             });
         }
     });
 
+    console.log('Built consolidated spec:', spec);
+    console.log('Parsed APIs:', parsedAPIs);
     return spec;
 }
 
