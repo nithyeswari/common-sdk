@@ -413,7 +413,7 @@
                             <div>
                                 <h3>⚙️ Step 3: Configure Aggregation Logic</h3>
                                 <p class="spec-manager-description">
-                                    Define how endpoints should be merged and configure output options
+                                    Review consolidated endpoints and configure how they should execute
                                 </p>
                             </div>
                             <button type="button" onclick="backToAggregatorConfig()" class="btn-back">
@@ -439,37 +439,132 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="section-label">🔀 Endpoint Merging Strategy</label>
+                            <label class="section-label">📋 Consolidated Endpoints Summary</label>
                             <p class="section-description">
-                                Configure how endpoints are combined in the new spec
+                                Review the 2-to-1 consolidated endpoints you created
                             </p>
-                            <div class="merge-strategy-options">
+                            <div id="consolidationsSummary" class="consolidations-summary">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">🔗 Header Forwarding Strategy</label>
+                            <p class="section-description">
+                                Configure how headers are forwarded from the consolidated endpoint to the 2 original endpoints
+                            </p>
+                            <div class="header-forwarding-options">
+                                <label class="strategy-option-inline">
+                                    <input type="radio" name="headerForwardingStrategy" value="forward-all" checked>
+                                    <div class="strategy-info-inline">
+                                        <strong>Forward All Headers</strong>
+                                        <small>Pass all incoming headers to both backend endpoints</small>
+                                    </div>
+                                </label>
+                                <label class="strategy-option-inline">
+                                    <input type="radio" name="headerForwardingStrategy" value="forward-selected">
+                                    <div class="strategy-info-inline">
+                                        <strong>Forward Selected Headers Only</strong>
+                                        <small>Only forward headers selected in Step 2</small>
+                                    </div>
+                                </label>
+                                <label class="strategy-option-inline">
+                                    <input type="radio" name="headerForwardingStrategy" value="transform-and-forward">
+                                    <div class="strategy-info-inline">
+                                        <strong>Transform & Forward</strong>
+                                        <small>Transform header values before forwarding (e.g., add prefix, modify format)</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">⚙️ Business Logic Configuration</label>
+                            <p class="section-description">
+                                Configure business logic that runs when the consolidated endpoint is called
+                            </p>
+                            <div class="business-logic-config">
                                 <label class="checkbox-label">
-                                    <input type="checkbox" id="mergeParameters" checked>
+                                    <input type="checkbox" id="logicMergeParameters" checked>
                                     <div>
                                         <strong>Merge Parameters</strong>
-                                        <small>Combine all parameters from both endpoints</small>
+                                        <small>Combine all parameters from both endpoints into the consolidated endpoint</small>
                                     </div>
                                 </label>
                                 <label class="checkbox-label">
-                                    <input type="checkbox" id="mergeResponses" checked>
+                                    <input type="checkbox" id="logicMergeResponses" checked>
                                     <div>
-                                        <strong>Merge Response Schemas</strong>
-                                        <small>Create unified response schema</small>
+                                        <strong>Merge Response Objects</strong>
+                                        <small>Combine response data from both endpoints into a single unified response</small>
                                     </div>
                                 </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicParallelCalls" checked>
+                                    <div>
+                                        <strong>Execute Calls in Parallel</strong>
+                                        <small>Call both backend endpoints concurrently for better performance (vs sequential)</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicValidateResponses">
+                                    <div>
+                                        <strong>Validate Backend Responses</strong>
+                                        <small>Validate responses from both endpoints against their OpenAPI schemas before merging</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicErrorHandling" checked>
+                                    <div>
+                                        <strong>Graceful Error Handling</strong>
+                                        <small>If one endpoint fails, return partial data from the successful endpoint (vs failing entirely)</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicCaching">
+                                    <div>
+                                        <strong>Response Caching</strong>
+                                        <small>Cache responses from backend endpoints to reduce redundant calls</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicTimeout">
+                                    <div>
+                                        <strong>Timeout Configuration</strong>
+                                        <small>Set timeout limits for backend API calls (default: 30s per endpoint)</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="logicRetry">
+                                    <div>
+                                        <strong>Retry Logic</strong>
+                                        <small>Automatically retry failed backend calls with exponential backoff</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">🔧 Code Generation Options</label>
+                            <div class="codegen-options">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="generateOrchestrationCode" checked>
                                     <div>
                                         <strong>Generate Orchestration Code</strong>
-                                        <small>Create Java/TypeScript code for calling both endpoints</small>
+                                        <small>Create Java/TypeScript code that implements the consolidation logic</small>
                                     </div>
                                 </label>
                                 <label class="checkbox-label">
-                                    <input type="checkbox" id="parallelCalls" checked>
+                                    <input type="checkbox" id="generateClientSDKs" checked>
                                     <div>
-                                        <strong>Parallel API Calls</strong>
-                                        <small>Call both endpoints concurrently for better performance</small>
+                                        <strong>Generate Client SDKs</strong>
+                                        <small>Create REST client code for calling the 2 backend services</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enableCO2Tracking">
+                                    <div>
+                                        <strong>CO2 Emission Tracking</strong>
+                                        <small>Add sustainability monitoring to track carbon footprint of API calls</small>
                                     </div>
                                 </label>
                             </div>
@@ -480,18 +575,11 @@
                             <div class="output-options">
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="downloadAggregatedSpec" checked>
-                                    <span>Download aggregated spec file</span>
+                                    <span>Download aggregated OpenAPI spec file</span>
                                 </label>
                                 <label class="checkbox-label">
                                     <input type="checkbox" id="generateFromAggregated" checked>
                                     <span>Generate SDKs from aggregated spec</span>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="enableCO2Tracking">
-                                    <div>
-                                        <strong>CO2 Emission Tracking</strong>
-                                        <small>Add sustainability monitoring annotations</small>
-                                    </div>
                                 </label>
                             </div>
                         </div>

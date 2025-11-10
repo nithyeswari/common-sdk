@@ -2105,7 +2105,71 @@ function proceedToAggregationLogic() {
     // Hide aggregator config, show aggregation logic step
     document.getElementById('aggregatorConfigStep').classList.add('hidden');
     document.getElementById('aggregationLogicStep').classList.remove('hidden');
+
+    // Populate consolidations summary
+    populateConsolidationsSummary();
+
     document.getElementById('aggregationLogicStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function populateConsolidationsSummary() {
+    const summaryDiv = document.getElementById('consolidationsSummary');
+    if (!summaryDiv) return;
+
+    summaryDiv.innerHTML = '';
+
+    if (consolidationRules.length === 0) {
+        summaryDiv.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No consolidations created yet.</p>';
+        return;
+    }
+
+    consolidationRules.forEach((consolidation, index) => {
+        if (consolidation.type !== '2-to-1-consolidation') return;
+
+        const item = document.createElement('div');
+        item.className = 'consolidation-summary-item';
+        item.innerHTML = `
+            <h5>
+                <span class="method-badge">${consolidation.method.toUpperCase()}</span>
+                <code>${consolidation.path}</code>
+            </h5>
+            <div style="font-size: 0.85rem; color: #6B7280; margin-bottom: 8px;">
+                ${consolidation.summary || 'Consolidated endpoint'}
+            </div>
+            <div class="endpoints-combined">
+                <div class="endpoint-box">
+                    <div style="font-weight: 600; margin-bottom: 4px; color: #374151;">
+                        ${consolidation.endpoint1.operation.method.toUpperCase()} ${consolidation.endpoint1.operation.path}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #6B7280;">
+                        From: ${consolidation.endpoint1.api}
+                    </div>
+                </div>
+                <div class="arrow">+</div>
+                <div class="endpoint-box">
+                    <div style="font-weight: 600; margin-bottom: 4px; color: #374151;">
+                        ${consolidation.endpoint2.operation.method.toUpperCase()} ${consolidation.endpoint2.operation.path}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #6B7280;">
+                        From: ${consolidation.endpoint2.api}
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                ${consolidation.rules.mergeParameters ? '<span class="spec-tag" style="background: #DBEAFE;">📋 Merge Params</span>' : ''}
+                ${consolidation.rules.mergeResponses ? '<span class="spec-tag" style="background: #D1FAE5;">📦 Merge Response</span>' : ''}
+                ${consolidation.rules.parallelCalls ? '<span class="spec-tag" style="background: #FEF3C7;">⚡ Parallel</span>' : ''}
+                ${consolidation.rules.generateOrchestrationCode ? '<span class="spec-tag" style="background: #E0E7FF;">🔧 With Code</span>' : ''}
+            </div>
+        `;
+        summaryDiv.appendChild(item);
+    });
+
+    // Add summary count
+    const countDiv = document.createElement('div');
+    countDiv.style.cssText = 'margin-top: 16px; padding: 12px; background: #EEF2FF; border-radius: 6px; text-align: center; font-weight: 600; color: #4F46E5;';
+    countDiv.textContent = `Total: ${consolidationRules.length} consolidated endpoint${consolidationRules.length > 1 ? 's' : ''}`;
+    summaryDiv.appendChild(countDiv);
 }
 
 function backToAggregatorConfig() {

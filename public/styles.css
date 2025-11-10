@@ -2219,6 +2219,124 @@ textarea:focus {
     border-left-color: #EF4444;
 }
 
+/* Header Forwarding & Inline Strategy Options */
+.header-forwarding-options,
+.strategy-option-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.strategy-option-inline {
+    border: 2px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.strategy-option-inline:hover {
+    border-color: #4F46E5;
+    background: #F9FAFB;
+}
+
+.strategy-option-inline input[type="radio"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    accent-color: #4F46E5;
+    cursor: pointer;
+}
+
+.strategy-option-inline input[type="radio"]:checked + .strategy-info-inline {
+    color: #4F46E5;
+}
+
+.strategy-info-inline {
+    flex: 1;
+}
+
+.strategy-info-inline strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+    color: #111827;
+}
+
+.strategy-info-inline small {
+    display: block;
+    color: #6B7280;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+/* Consolidations Summary */
+.consolidations-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.consolidation-summary-item {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-left: 4px solid #10B981;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.consolidation-summary-item h5 {
+    color: #111827;
+    font-size: 1rem;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.consolidation-summary-item .method-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: #10B981;
+    color: white;
+}
+
+.consolidation-summary-item .endpoints-combined {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+}
+
+.consolidation-summary-item .endpoint-box {
+    padding: 8px;
+    background: #F3F4F6;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.consolidation-summary-item .endpoint-box code {
+    color: #4F46E5;
+    font-weight: 600;
+}
+
+.consolidation-summary-item .arrow {
+    color: #10B981;
+    font-weight: 700;
+    font-size: 1.2rem;
+}
+
 @media (max-width: 768px) {
     .strategy-selection {
         grid-template-columns: 1fr;
@@ -2230,5 +2348,14 @@ textarea:focus {
 
     .preview-actions button {
         width: 100%;
+    }
+
+    .consolidation-summary-item .endpoints-combined {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .consolidation-summary-item .arrow {
+        text-align: center;
     }
 }
