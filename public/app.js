@@ -1442,8 +1442,15 @@ function applyConsolidation() {
 }
 
 function displaySavedConsolidations() {
-    const endpointMergeList = document.getElementById('endpointMergeList');
-    if (!endpointMergeList || consolidationRules.length === 0) return;
+    const consolidationsList = document.getElementById('consolidationsList');
+    if (!consolidationsList) return;
+
+    consolidationsList.innerHTML = '';
+
+    if (consolidationRules.length === 0) {
+        consolidationsList.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No consolidated endpoints created yet. Click the button below to create one.</p>';
+        return;
+    }
 
     // Add saved consolidations to the list
     consolidationRules.forEach(consolidation => {
@@ -1500,7 +1507,7 @@ function displaySavedConsolidations() {
             </div>
         `;
 
-        endpointMergeList.appendChild(item);
+        consolidationsList.appendChild(item);
     });
 }
 
@@ -2118,14 +2125,37 @@ function populateConsolidationsSummary() {
 
     summaryDiv.innerHTML = '';
 
+    console.log('Consolidation rules:', consolidationRules);
+
     if (consolidationRules.length === 0) {
-        summaryDiv.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No consolidations created yet.</p>';
+        summaryDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; background: #FEF3C7; border-radius: 8px; border: 2px dashed #F59E0B;">
+                <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
+                <div style="color: #92400E; font-weight: 600; margin-bottom: 8px;">No consolidations found!</div>
+                <div style="color: #78350F; font-size: 0.9rem;">
+                    Please go back to Step 2 and create at least one consolidated endpoint (2-to-1).
+                </div>
+            </div>
+        `;
         return;
     }
 
-    consolidationRules.forEach((consolidation, index) => {
-        if (consolidation.type !== '2-to-1-consolidation') return;
+    const consolidations = consolidationRules.filter(r => r.type === '2-to-1-consolidation');
 
+    if (consolidations.length === 0) {
+        summaryDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; background: #FEF3C7; border-radius: 8px; border: 2px dashed #F59E0B;">
+                <div style="font-size: 2rem; margin-bottom: 12px;">⚠️</div>
+                <div style="color: #92400E; font-weight: 600; margin-bottom: 8px;">No consolidations found!</div>
+                <div style="color: #78350F; font-size: 0.9rem;">
+                    Please go back to Step 2 and create at least one consolidated endpoint (2-to-1).
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    consolidations.forEach((consolidation, index) => {
         const item = document.createElement('div');
         item.className = 'consolidation-summary-item';
         item.innerHTML = `
@@ -2168,7 +2198,7 @@ function populateConsolidationsSummary() {
     // Add summary count
     const countDiv = document.createElement('div');
     countDiv.style.cssText = 'margin-top: 16px; padding: 12px; background: #EEF2FF; border-radius: 6px; text-align: center; font-weight: 600; color: #4F46E5;';
-    countDiv.textContent = `Total: ${consolidationRules.length} consolidated endpoint${consolidationRules.length > 1 ? 's' : ''}`;
+    countDiv.textContent = `Total: ${consolidations.length} consolidated endpoint${consolidations.length > 1 ? 's' : ''}`;
     summaryDiv.appendChild(countDiv);
 }
 
