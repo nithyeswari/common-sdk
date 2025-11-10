@@ -2054,37 +2054,151 @@ function closeSuccessModal() {
 // Workflow Navigation Functions
 function proceedToSpecManager() {
     const strategy = document.querySelector('input[name="aggregationStrategy"]:checked')?.value;
-    selectedStrategy = strategy || 'merge-all';
+    selectedStrategy = strategy || 'aggregator';
 
-    // Hide strategy step, show spec manager step
+    // Hide strategy step
     document.getElementById('aggregationStrategyStep').classList.add('hidden');
-    document.getElementById('specificationManagerStep').classList.remove('hidden');
 
-    // Configure UI based on selected strategy
-    if (strategy === 'merge-all') {
-        // Hide advanced options for auto-merge
-        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.add('hidden');
-        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.add('hidden');
-    } else if (strategy === 'manual-config') {
-        // Show all configuration options
-        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.remove('hidden');
-        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.remove('hidden');
-        // Auto-scan for duplicates
-        scanForDuplicateEndpoints();
+    if (strategy === 'aggregator') {
+        // Show aggregator config step
+        document.getElementById('aggregatorConfigStep').classList.remove('hidden');
+
+        // Populate aggregator API list
+        updateAggregatorApiList();
+        populateAggregatorHeaderConfig();
+        displaySavedConsolidations();
+
+        // Scroll to view
+        document.getElementById('aggregatorConfigStep').scrollIntoView({ behavior: 'smooth' });
     } else if (strategy === 'main-plus-clients') {
-        // Show client/main configuration
-        document.getElementById('scanForDuplicates')?.closest('.form-section')?.classList.add('hidden');
-        document.getElementById('addPayloadMapping')?.closest('.form-section')?.classList.add('hidden');
-    }
+        // Show main+clients config step
+        document.getElementById('mainClientConfigStep').classList.remove('hidden');
 
-    // Scroll to view
-    document.getElementById('specificationManagerStep').scrollIntoView({ behavior: 'smooth' });
+        // Populate API list
+        updateAPIList();
+        extractAllHeaders();
+        populateHeaderConfig();
+
+        // Scroll to view
+        document.getElementById('mainClientConfigStep').scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 function backToStrategy() {
-    document.getElementById('specificationManagerStep').classList.add('hidden');
+    // Hide all config steps
+    document.getElementById('aggregatorConfigStep').classList.add('hidden');
+    document.getElementById('mainClientConfigStep').classList.add('hidden');
+    document.getElementById('aggregationLogicStep').classList.add('hidden');
+
+    // Show strategy step
     document.getElementById('aggregationStrategyStep').classList.remove('hidden');
     document.getElementById('aggregationStrategyStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function proceedToAggregationLogic() {
+    // Validate that at least one consolidation exists
+    if (consolidationRules.length === 0) {
+        alert('Please create at least one consolidated endpoint (2-to-1) before proceeding');
+        return;
+    }
+
+    // Hide aggregator config, show aggregation logic step
+    document.getElementById('aggregatorConfigStep').classList.add('hidden');
+    document.getElementById('aggregationLogicStep').classList.remove('hidden');
+    document.getElementById('aggregationLogicStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function backToAggregatorConfig() {
+    document.getElementById('aggregationLogicStep').classList.add('hidden');
+    document.getElementById('aggregatorConfigStep').classList.remove('hidden');
+    document.getElementById('aggregatorConfigStep').scrollIntoView({ behavior: 'smooth' });
+}
+
+function proceedToGenerate() {
+    // For main+clients, skip to SDK generation
+    // Hide workflow and show the generate button
+    document.getElementById('mainClientConfigStep').classList.add('hidden');
+    alert('Configuration complete! Scroll down and click "Generate SDK" to create your Quarkus Full Stack project.');
+}
+
+// Helper functions for aggregator
+function updateAggregatorApiList() {
+    const apiList = document.getElementById('aggregatorApiList');
+    if (!apiList) return;
+
+    apiList.innerHTML = '';
+
+    if (parsedAPIs.length === 0) {
+        apiList.innerHTML = '<p style="color: #6B7280; text-align: center; padding: 20px;">No specs uploaded yet.</p>';
+        return;
+    }
+
+    parsedAPIs.forEach((api, index) => {
+        const item = document.createElement('div');
+        item.className = 'api-item';
+        item.innerHTML = `
+            <div class="api-item-info" style="flex: 1;">
+                <div class="api-item-title">${api.title || 'Untitled API'}</div>
+                <div class="api-item-meta">
+                    ${api.operations.length} operations • ${api.fileName}
+                </div>
+            </div>
+            <span class="api-badge client">🔗 Client</span>
+        `;
+        apiList.appendChild(item);
+    });
+}
+
+function populateAggregatorHeaderConfig() {
+    const headerConfig = document.getElementById('aggregatorHeaderConfig');
+    if (!headerConfig) return;
+
+    headerConfig.innerHTML = '';
+
+    extractAllHeaders();
+
+    const defaultHeaders = [
+        'Authorization',
+        'X-Request-ID',
+        'X-Correlation-ID',
+        'X-Tenant-ID'
+    ];
+
+    const allHeadersList = Array.from(allHeaders);
+    defaultHeaders.forEach(h => {
+        if (!allHeadersList.includes(h)) {
+            allHeadersList.unshift(h);
+        }
+    });
+
+    allHeadersList.forEach((headerName, index) => {
+        const config = selectedHeaders[headerName] || { propagate: false, transform: false };
+        const isDetected = allHeaders.has(headerName);
+
+        const item = document.createElement('div');
+        item.className = 'header-item';
+        item.innerHTML = `
+            <div class="header-name-column">
+                <input type="checkbox" id="agg-header-${index}" ${config.propagate ? 'checked' : ''}
+                    onchange="updateHeaderConfig('${headerName}', 'propagate', this.checked)">
+                <label for="agg-header-${index}" class="header-label">${headerName}</label>
+            </div>
+            <div class="header-source-badge">
+                <span class="badge ${isDetected ? 'badge-detected' : 'badge-default'}">
+                    ${isDetected ? '🔍 Detected' : '⭐ Default'}
+                </span>
+            </div>
+        `;
+        headerConfig.appendChild(item);
+    });
+}
+
+function addAggregatorCustomHeader() {
+    const headerName = prompt('Enter custom header name:');
+    if (headerName && headerName.trim()) {
+        allHeaders.add(headerName.trim());
+        populateAggregatorHeaderConfig();
+    }
 }
 
 async function proceedToPreview() {

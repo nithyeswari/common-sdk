@@ -83,20 +83,6 @@
                                 <small>TypeScript client with RTK Query & Redux Toolkit</small>
                             </span>
                         </label>
-                        <label class="sdk-type-option">
-                            <input type="checkbox" name="sdkType" value="spring-boot">
-                            <span class="sdk-type-label">
-                                <strong>Spring Boot Backend</strong>
-                                <small>Java REST API with Spring Boot 3.x</small>
-                            </span>
-                        </label>
-                        <label class="sdk-type-option">
-                            <input type="checkbox" name="sdkType" value="quarkus">
-                            <span class="sdk-type-label">
-                                <strong>Quarkus Backend</strong>
-                                <small>Java REST API with Quarkus 3.x</small>
-                            </span>
-                        </label>
                         <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
                             <input type="checkbox" name="sdkType" value="quarkus-fullstack">
                             <span class="sdk-type-label">
@@ -175,29 +161,19 @@
 
                         <div class="strategy-selection">
                             <label class="strategy-card">
-                                <input type="radio" name="aggregationStrategy" value="merge-all" checked>
+                                <input type="radio" name="aggregationStrategy" value="aggregator" checked>
                                 <div class="strategy-content">
                                     <div class="strategy-icon">🔄</div>
-                                    <h4>Auto-Merge All Specs</h4>
-                                    <p>Automatically merge all specs with smart conflict resolution. Duplicate endpoints will be intelligently combined.</p>
+                                    <h4>Spec Aggregator (2-to-1)</h4>
+                                    <p>Create a new unified specification by combining endpoints from multiple specs. Each new endpoint calls 2 original endpoints and merges responses.</p>
                                     <div class="strategy-features">
-                                        <span>✓ Smart merging</span>
-                                        <span>✓ Parameter consolidation</span>
-                                        <span>✓ Schema compatibility</span>
-                                    </div>
-                                </div>
-                            </label>
-
-                            <label class="strategy-card">
-                                <input type="radio" name="aggregationStrategy" value="manual-config">
-                                <div class="strategy-content">
-                                    <div class="strategy-icon">⚙️</div>
-                                    <h4>Manual Configuration</h4>
-                                    <p>Configure exactly how each endpoint should be handled. Full control over merging, consolidation, and payload mapping.</p>
-                                    <div class="strategy-features">
-                                        <span>✓ Full control</span>
-                                        <span>✓ Custom merging</span>
                                         <span>✓ 2-to-1 consolidation</span>
+                                        <span>✓ Response merging</span>
+                                        <span>✓ Header propagation</span>
+                                        <span>✓ Business logic</span>
+                                    </div>
+                                    <div style="margin-top: 12px; padding: 10px; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.85rem;">
+                                        <strong>What it does:</strong> Combines 2 different endpoints (e.g., <code>GET /users/{id}</code> + <code>GET /profile/{id}</code>) into 1 new endpoint that orchestrates both calls and merges results.
                                     </div>
                                 </div>
                             </label>
@@ -207,11 +183,15 @@
                                 <div class="strategy-content">
                                     <div class="strategy-icon">🏗️</div>
                                     <h4>Main Service + Clients</h4>
-                                    <p>Create a main gateway service that orchestrates calls to client services. Perfect for microservice architectures.</p>
+                                    <p>Generate a Quarkus main service with REST clients for calling other services. No spec aggregation - just header propagation and orchestration code.</p>
                                     <div class="strategy-features">
-                                        <span>✓ Gateway pattern</span>
+                                        <span>✓ Main service backend</span>
+                                        <span>✓ Client SDK generation</span>
                                         <span>✓ Header propagation</span>
-                                        <span>✓ Client orchestration</span>
+                                        <span>✓ Simple orchestration</span>
+                                    </div>
+                                    <div style="margin-top: 12px; padding: 10px; background: #DBEAFE; border-left: 3px solid #3B82F6; border-radius: 4px; font-size: 0.85rem;">
+                                        <strong>What it does:</strong> Generates code for main service + client SDKs. No new spec is created - uses existing specs as-is.
                                     </div>
                                 </div>
                             </label>
@@ -225,13 +205,13 @@
                         </button>
                     </div>
 
-                    <!-- Step 2: Specification Manager -->
-                    <div id="specificationManagerStep" class="workflow-step hidden">
+                    <!-- Step 2a: Aggregator Configuration -->
+                    <div id="aggregatorConfigStep" class="workflow-step hidden">
                         <div class="spec-manager-header">
                             <div>
-                                <h3>📋 Step 2: Configure Specifications</h3>
+                                <h3>🔄 Step 2: Create Aggregated Spec</h3>
                                 <p class="spec-manager-description">
-                                    Manage your specifications and configure merging details
+                                    Select endpoints to combine and configure how they should be merged
                                 </p>
                             </div>
                             <button type="button" onclick="backToStrategy()" class="btn-back">
@@ -242,25 +222,117 @@
                             </button>
                         </div>
 
-                    <div class="form-group">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <label class="section-label" style="margin-bottom: 0;">
-                                📚 Uploaded API Specifications
-                            </label>
-                            <button type="button" id="createMainFromClients" class="btn-create-main">
+                        <div class="form-group">
+                            <label class="section-label">📚 Uploaded Specifications</label>
+                            <div id="aggregatorApiList" class="api-list-enhanced">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">⚡ Create Consolidated Endpoints (2-to-1)</label>
+                            <p class="section-description">
+                                Combine 2 different endpoints into 1 new endpoint that calls both and merges responses
+                            </p>
+                            <div id="consolidationsList" class="consolidations-list">
+                                <!-- Shows created consolidations -->
+                            </div>
+                            <button type="button" onclick="showConsolidationBuilder()" class="btn-scan">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path d="M12 5v14M5 12h14"></path>
                                 </svg>
-                                Create Main from Clients
+                                Create New Consolidated Endpoint
                             </button>
                         </div>
-                        <div id="apiList" class="api-list-enhanced">
-                            <!-- Populated dynamically -->
+
+                        <div class="form-group">
+                            <label class="section-label">🔗 Header Propagation</label>
+                            <p class="section-description">
+                                Configure which headers should be propagated from incoming requests to client API calls
+                            </p>
+                            <div id="aggregatorHeaderConfig" class="header-config">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <button type="button" onclick="addAggregatorCustomHeader()" class="btn-add-header">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Add Custom Header
+                            </button>
                         </div>
-                        <div class="helper-text">
-                            💡 Click on an API to select it as the main service • ⭐ = Main Service • 🔗 = Client Service
+
+                        <div class="form-group">
+                            <label class="section-label">⚙️ Business Logic & Transformations</label>
+                            <div class="business-logic-config">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="aggregatorEnableValidation" checked>
+                                    <div>
+                                        <strong>Request/Response Validation</strong>
+                                        <small>Validate against OpenAPI schema</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="aggregatorEnableTransformation" checked>
+                                    <div>
+                                        <strong>Data Transformation</strong>
+                                        <small>Transform data between services</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="aggregatorEnableEnrichment">
+                                    <div>
+                                        <strong>Response Enrichment</strong>
+                                        <small>Enrich responses with additional data</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="aggregatorEnableCaching">
+                                    <div>
+                                        <strong>Response Caching</strong>
+                                        <small>Cache responses from client services</small>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
+
+                        <button type="button" onclick="proceedToAggregationLogic()" class="btn-primary btn-proceed">
+                            Continue to Aggregation Logic
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
                     </div>
+
+                    <!-- Step 2b: Main+Clients Configuration -->
+                    <div id="mainClientConfigStep" class="workflow-step hidden">
+                        <div class="spec-manager-header">
+                            <div>
+                                <h3>🏗️ Step 2: Configure Main Service + Clients</h3>
+                                <p class="spec-manager-description">
+                                    Select main service and configure header propagation (no spec aggregation)
+                                </p>
+                            </div>
+                            <button type="button" onclick="backToStrategy()" class="btn-back">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Back
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">📚 Uploaded API Specifications</label>
+                            <p class="section-description">
+                                Click on an API to select it as the main service. Others will be clients.
+                            </p>
+                            <div id="apiList" class="api-list-enhanced">
+                                <!-- Populated dynamically -->
+                            </div>
+                            <div class="helper-text">
+                                💡 ⭐ = Main Service • 🔗 = Client Service
+                            </div>
+                        </div>
 
                     <div class="form-group">
                         <label class="section-label">
@@ -326,9 +398,113 @@
                                 </div>
                             </label>
                         </div>
+
+                        <button type="button" onclick="proceedToGenerate()" class="btn-primary btn-proceed">
+                            Proceed to Generate SDKs
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
                     </div>
 
-                    <!-- Spec Aggregator Section -->
+                    <!-- Step 3: Aggregation Logic (only for Aggregator strategy) -->
+                    <div id="aggregationLogicStep" class="workflow-step hidden">
+                        <div class="spec-manager-header">
+                            <div>
+                                <h3>⚙️ Step 3: Configure Aggregation Logic</h3>
+                                <p class="spec-manager-description">
+                                    Define how endpoints should be merged and configure output options
+                                </p>
+                            </div>
+                            <button type="button" onclick="backToAggregatorConfig()" class="btn-back">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                Back
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">📝 Aggregated Spec Details</label>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="option-label">Spec Name</label>
+                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api" class="input-field">
+                                </div>
+                                <div class="form-group">
+                                    <label class="option-label">Version</label>
+                                    <input type="text" id="aggregatedSpecVersion" placeholder="1.0.0" value="1.0.0" class="input-field">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">🔀 Endpoint Merging Strategy</label>
+                            <p class="section-description">
+                                Configure how endpoints are combined in the new spec
+                            </p>
+                            <div class="merge-strategy-options">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="mergeParameters" checked>
+                                    <div>
+                                        <strong>Merge Parameters</strong>
+                                        <small>Combine all parameters from both endpoints</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="mergeResponses" checked>
+                                    <div>
+                                        <strong>Merge Response Schemas</strong>
+                                        <small>Create unified response schema</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="generateOrchestrationCode" checked>
+                                    <div>
+                                        <strong>Generate Orchestration Code</strong>
+                                        <small>Create Java/TypeScript code for calling both endpoints</small>
+                                    </div>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="parallelCalls" checked>
+                                    <div>
+                                        <strong>Parallel API Calls</strong>
+                                        <small>Call both endpoints concurrently for better performance</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="section-label">📊 Output Options</label>
+                            <div class="output-options">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="downloadAggregatedSpec" checked>
+                                    <span>Download aggregated spec file</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="generateFromAggregated" checked>
+                                    <span>Generate SDKs from aggregated spec</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enableCO2Tracking">
+                                    <div>
+                                        <strong>CO2 Emission Tracking</strong>
+                                        <small>Add sustainability monitoring annotations</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
+                            Preview Aggregated Spec
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Remove old spec aggregator section -->
                     <div class="form-group aggregator-section">
                         <label class="section-label">
                             🔄 Spec Aggregator
