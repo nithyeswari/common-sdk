@@ -2473,31 +2473,30 @@ function buildConsolidatedSpec() {
         operation.parameters = consolidation.mergedParameters || [];
         operation.responses = {
             '200': {
-                    description: 'Successful consolidated response',
-                    content: {
-                        'application/json': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    data: {
-                                        type: 'object',
-                                        description: 'Merged data from both endpoints'
+                description: 'Successful consolidated response',
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                data: {
+                                    type: 'object',
+                                    description: 'Merged data from both endpoints'
+                                },
+                                sources: {
+                                    type: 'array',
+                                    items: {
+                                        type: 'string'
                                     },
-                                    sources: {
-                                        type: 'array',
-                                        items: {
-                                            type: 'string'
-                                        },
-                                        description: 'Source APIs that provided data'
-                                    }
+                                    description: 'Source APIs that provided data'
                                 }
                             }
                         }
                     }
-                },
-                '500': {
-                    description: 'Error from backend services'
                 }
+            },
+            '500': {
+                description: 'Error from backend services'
             }
         };
 
