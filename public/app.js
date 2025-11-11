@@ -16,22 +16,20 @@ const javaOptions = document.getElementById('javaOptions');
 
 // Toggle Java options visibility based on SDK type selection
 function updateJavaOptionsVisibility() {
-    const springBootChecked = document.querySelector('input[value="spring-boot"]').checked;
-    const quarkusChecked = document.querySelector('input[value="quarkus"]').checked;
-    const quarkusFullstackChecked = document.querySelector('input[value="quarkus-fullstack"]').checked;
-    const springBootClientChecked = document.querySelector('input[value="spring-boot-client"]').checked;
-    const quarkusClientChecked = document.querySelector('input[value="quarkus-client"]').checked;
+    const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
+    const javaSDKs = ['spring-boot', 'quarkus', 'quarkus-fullstack', 'spring-boot-client', 'quarkus-client'];
 
-    if (springBootChecked || quarkusChecked || quarkusFullstackChecked || springBootClientChecked || quarkusClientChecked) {
+    if (javaSDKs.includes(selectedSDK)) {
         javaOptions.classList.remove('hidden');
     } else {
         javaOptions.classList.add('hidden');
     }
 }
 
-// Add event listeners to SDK type checkboxes
-sdkTypeCheckboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', updateJavaOptionsVisibility);
+// Add event listeners to SDK type radio buttons
+const sdkTypeRadios = document.querySelectorAll('input[name="sdkType"]');
+sdkTypeRadios.forEach(radio => {
+    radio.addEventListener('change', updateJavaOptionsVisibility);
 });
 
 // Toggle aggregator options visibility
@@ -2726,7 +2724,7 @@ function switchAggregatorPreviewTab(tab) {
     // Update tab buttons
     document.querySelectorAll('.preview-tab').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.textContent.toLowerCase().includes(tab)) {
+        if (btn.onclick && btn.onclick.toString().includes(`'${tab}'`)) {
             btn.classList.add('active');
         }
     });
@@ -2780,16 +2778,149 @@ function switchAggregatorPreviewTab(tab) {
     } else if (tab === 'yaml') {
         const yamlContent = jsyaml.dump(aggregatedSpecPreview, { indent: 2, lineWidth: -1 });
         contentDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${yamlContent}</pre>`;
+    } else if (tab === 'code') {
+        // Get selected SDK type
+        const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value || 'react';
+        const sdkNames = {
+            'react': 'React + Redux SDK',
+            'quarkus-fullstack': 'Quarkus Full Stack',
+            'spring-boot-client': 'Spring Boot Client',
+            'quarkus-client': 'Quarkus Client'
+        };
+
+        contentDiv.innerHTML = `
+            <div style="padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                <div style="background: #EEF2FF; border: 2px solid #4F46E5; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #4F46E5; margin-bottom: 8px;">
+                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        <strong style="font-size: 1.1rem;">Code Preview: ${sdkNames[selectedSDK]}</strong>
+                    </div>
+                    <p style="color: #6366F1; margin: 0; font-size: 0.9rem;">
+                        Click "Download & Generate SDKs" below to generate the complete code package
+                    </p>
+                </div>
+
+                <div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px;">
+                    <h4 style="color: #111827; margin: 0 0 12px 0;">📦 What will be generated:</h4>
+                    <ul style="color: #6B7280; line-height: 1.8; margin: 0; padding-left: 20px;">
+                        ${selectedSDK === 'react' ? `
+                            <li>TypeScript API client with type definitions</li>
+                            <li>RTK Query endpoints and hooks</li>
+                            <li>Redux store configuration</li>
+                            <li>React hooks for all API operations</li>
+                        ` : selectedSDK === 'quarkus-fullstack' ? `
+                            <li>Quarkus REST backend application</li>
+                            <li>JAX-RS resource classes</li>
+                            <li>REST client interface</li>
+                            <li>Request/Response DTOs</li>
+                            <li>Header propagation configuration</li>
+                            <li>application.properties with settings</li>
+                        ` : selectedSDK === 'spring-boot-client' ? `
+                            <li>Spring Boot REST client library</li>
+                            <li>RestTemplate/WebClient configuration</li>
+                            <li>Request/Response DTOs</li>
+                            <li>Service interfaces</li>
+                            <li>Auto-configuration classes</li>
+                        ` : `
+                            <li>Quarkus REST client interface</li>
+                            <li>MicroProfile REST Client configuration</li>
+                            <li>Request/Response DTOs</li>
+                            <li>Header propagation</li>
+                            <li>application.properties</li>
+                        `}
+                    </ul>
+                </div>
+
+                ${aggregatedSpecPreview.paths && Object.keys(aggregatedSpecPreview.paths).length > 0 ? `
+                    <div style="margin-top: 20px; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px;">
+                        <h4 style="color: #111827; margin: 0 0 12px 0;">🔌 API Endpoints (${Object.keys(aggregatedSpecPreview.paths).length})</h4>
+                        <div style="display: grid; gap: 8px;">
+                            ${Object.entries(aggregatedSpecPreview.paths).map(([path, methods]) =>
+                                Object.keys(methods).map(method => `
+                                    <div style="font-family: monospace; font-size: 0.9rem; padding: 8px; background: white; border-radius: 4px; border: 1px solid #E5E7EB;">
+                                        <span style="color: #10B981; font-weight: bold;">${method.toUpperCase()}</span>
+                                        <span style="color: #6B7280;">${path}</span>
+                                    </div>
+                                `).join('')
+                            ).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
     }
 }
 
-function proceedToGeneration() {
-    // Download the spec first
-    downloadAggregatedSpecNow();
+async function proceedToGeneration() {
+    try {
+        // Download the spec first
+        downloadAggregatedSpecNow();
 
-    // Close workflow and show generate button
-    document.getElementById('aggregatorPreviewStep').classList.add('hidden');
+        // Get the selected SDK type
+        const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
 
-    // Trigger the main generate button
-    alert('Spec downloaded! Now scroll down and click "Generate SDK" to create SDKs from the aggregated specification.');
+        if (!selectedSDK) {
+            alert('Please select an SDK type to generate');
+            return;
+        }
+
+        // Show progress
+        progressContainer.classList.remove('hidden');
+        progressText.textContent = 'Generating SDK from consolidated spec...';
+        progressBar.style.width = '0%';
+
+        // Convert aggregated spec to YAML
+        const specYAML = jsyaml.dump(aggregatedSpecPreview, { indent: 2, lineWidth: -1 });
+
+        // Get form values
+        const moduleName = moduleNameInput.value || 'api';
+        const baseURL = baseURLInput.value || '';
+        const groupId = document.getElementById('groupId')?.value || '';
+        const artifactId = document.getElementById('artifactId')?.value || '';
+
+        // Create generator instance
+        const generator = new window.SDKGenerator();
+
+        // Generate SDK
+        progressBar.style.width = '30%';
+        progressText.textContent = `Generating ${selectedSDK} SDK...`;
+
+        const result = await generator.generateSDK({
+            spec: specYAML,
+            moduleName,
+            baseURL,
+            sdkTypes: [selectedSDK],
+            groupId,
+            artifactId
+        });
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'SDK generated successfully!';
+
+        // Download the generated SDK
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = result.zipUrl;
+            link.download = `${moduleName}-sdk.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Hide progress and show success
+            setTimeout(() => {
+                progressContainer.classList.add('hidden');
+                successContainer.classList.remove('hidden');
+                document.getElementById('aggregatorPreviewStep').classList.add('hidden');
+            }, 1000);
+        }, 500);
+
+    } catch (error) {
+        console.error('Generation error:', error);
+        errorContainer.classList.remove('hidden');
+        errorText.textContent = `Error generating SDK: ${error.message}`;
+        progressContainer.classList.add('hidden');
+    }
 }
