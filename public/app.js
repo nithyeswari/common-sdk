@@ -2746,6 +2746,7 @@ function populateAggregatorPreview(spec) {
 
 function switchAggregatorPreviewTab(tab) {
     console.log('switchAggregatorPreviewTab called with tab:', tab);
+    console.log('aggregatedSpecPreview:', aggregatedSpecPreview);
 
     // Update tab buttons
     document.querySelectorAll('.preview-tab').forEach(btn => {
@@ -2765,6 +2766,18 @@ function switchAggregatorPreviewTab(tab) {
     }
 
     console.log('contentDiv found, displaying tab:', tab);
+
+    // Check if spec preview exists
+    if (!aggregatedSpecPreview) {
+        console.error('aggregatedSpecPreview is not defined');
+        contentDiv.innerHTML = `
+            <div style="padding: 40px; text-align: center; color: #EF4444;">
+                <h3>Preview not available</h3>
+                <p>The consolidated spec preview is not ready. Please try again.</p>
+            </div>
+        `;
+        return;
+    }
 
     if (tab === 'summary') {
         const pathsArray = Object.entries(aggregatedSpecPreview.paths || {});
@@ -2797,7 +2810,7 @@ function switchAggregatorPreviewTab(tab) {
                     </div>
                 ` : ''}
                 <div style="display: grid; gap: 8px;">
-                    ${endpoints.map(ep => `
+                    ${endpoints.length > 0 ? endpoints.map(ep => `
                         <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #10B981;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong style="color: #10B981;">${ep.method}</strong>
@@ -2805,10 +2818,11 @@ function switchAggregatorPreviewTab(tab) {
                                 ${ep.hasTracking ? '<span style="background: #ECFDF5; color: #059669; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; margin-left: auto;">📊 Tracked</span>' : ''}
                             </div>
                         </div>
-                    `).join('')}
+                    `).join('') : '<div style="padding: 20px; text-align: center; color: #6B7280;">No endpoints found in consolidated spec</div>'}
                 </div>
             </div>
         `;
+        console.log('Summary tab content set, endpoints count:', endpoints.length);
     } else if (tab === 'yaml') {
         const yamlContent = jsyaml.dump(aggregatedSpecPreview, { indent: 2, lineWidth: -1 });
         contentDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${yamlContent}</pre>`;
