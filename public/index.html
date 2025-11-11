@@ -282,6 +282,42 @@
                             </div>
                         </div>
 
+                        <div class="form-group">
+                            <label class="section-label">📊 API Call Tracking & Metrics</label>
+                            <p class="section-description">
+                                Monitor and track API calls in workflow executions
+                            </p>
+                            <div class="business-logic-config">
+                                <label class="checkbox-label" style="border: 2px solid #10B981; background: #ECFDF5; padding: 12px; border-radius: 8px;">
+                                    <input type="checkbox" id="enableApiCallTracking" checked>
+                                    <div>
+                                        <strong>Enable API Call Tracking</strong>
+                                        <small>Track API calls grouped by Correlation ID and API Name</small>
+                                    </div>
+                                </label>
+                                <div id="apiTrackingOptions" class="tracking-options" style="margin-top: 12px; padding-left: 24px;">
+                                    <div style="margin-bottom: 8px; color: #059669; font-size: 0.9rem;">
+                                        <strong>📈 Metrics Generated:</strong>
+                                    </div>
+                                    <ul style="margin: 0; padding-left: 20px; color: #6B7280; font-size: 0.85rem;">
+                                        <li><code>api_calls_total</code> - Total API calls per workflow</li>
+                                        <li><code>api_calls_per_workflow</code> - Calls grouped by correlation ID</li>
+                                        <li><code>api_call_duration</code> - Duration metrics per call</li>
+                                    </ul>
+                                    <div style="margin-top: 12px; padding: 10px; background: #F3F4F6; border-radius: 6px; font-size: 0.85rem;">
+                                        <strong>Java Annotations:</strong><br>
+                                        <code style="display: block; margin-top: 4px;">@ApiCallTracking</code>
+                                        <code style="display: block;">@MetricsTracked(groupBy = {"correlationId", "apiName"})</code>
+                                        <code style="display: block;">@Counted(name = "api_calls_total")</code>
+                                    </div>
+                                    <div style="margin-top: 12px; padding: 10px; background: #EEF2FF; border-radius: 6px; font-size: 0.85rem;">
+                                        <strong>Headers Used:</strong><br>
+                                        <code style="display: block; margin-top: 4px;">X-Correlation-ID</code> - Propagated to all upstream APIs
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
                             Preview Consolidated Spec
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

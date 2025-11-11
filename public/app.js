@@ -2326,6 +2326,7 @@ async function proceedToPreview() {
 
 function buildConsolidatedSpec() {
     const consolidations = consolidationRules.filter(r => r.type === '2-to-1-consolidation');
+    const enableApiCallTracking = document.getElementById('enableApiCallTracking')?.checked || false;
 
     // Create base spec
     const spec = {
@@ -2355,9 +2356,15 @@ function buildConsolidatedSpec() {
         }
 
         // Build consolidated operation
+        let descriptionText = `This endpoint calls both:\n- ${consolidation.endpoint1.operation.method.toUpperCase()} ${consolidation.endpoint1.operation.path} (${consolidation.endpoint1.api})\n- ${consolidation.endpoint2.operation.method.toUpperCase()} ${consolidation.endpoint2.operation.path} (${consolidation.endpoint2.api})\n\nAnd merges their responses into a unified result.`;
+
+        if (enableApiCallTracking) {
+            descriptionText += '\n\n**API Call Tracking:**\nThis endpoint tracks API calls using correlation ID and API name for monitoring workflow execution.';
+        }
+
         const operation = {
             summary: consolidation.summary || `Consolidated endpoint combining data from ${consolidation.endpoint1.api} and ${consolidation.endpoint2.api}`,
-            description: `This endpoint calls both:\n- ${consolidation.endpoint1.operation.method.toUpperCase()} ${consolidation.endpoint1.operation.path} (${consolidation.endpoint1.api})\n- ${consolidation.endpoint2.operation.method.toUpperCase()} ${consolidation.endpoint2.operation.path} (${consolidation.endpoint2.api})\n\nAnd merges their responses into a unified result.`,
+            description: descriptionText,
             operationId: consolidation.operationId || `consolidated_${method}_${path.replace(/\//g, '_').replace(/[{}]/g, '')}`,
             'x-consolidation': {
                 type: '2-to-1',
@@ -2374,10 +2381,51 @@ function buildConsolidatedSpec() {
                     }
                 ],
                 rules: consolidation.rules
-            },
-            parameters: consolidation.mergedParameters || [],
-            responses: {
-                '200': {
+            }
+        };
+
+        // Add API call tracking extension if enabled
+        if (enableApiCallTracking) {
+            operation['x-api-call-tracking'] = {
+                enabled: true,
+                groupBy: ['correlationId', 'apiName'],
+                description: 'Track how many times each API is called per workflow execution',
+                metrics: {
+                    counters: [
+                        {
+                            name: 'api_calls_total',
+                            description: 'Total number of API calls made',
+                            labels: ['correlation_id', 'api_name', 'method', 'path', 'status']
+                        },
+                        {
+                            name: 'api_calls_per_workflow',
+                            description: 'API calls grouped by correlation ID',
+                            labels: ['correlation_id', 'api_name']
+                        }
+                    ],
+                    javaAnnotations: [
+                        '@ApiCallTracking',
+                        '@MetricsTracked(groupBy = {"correlationId", "apiName"})',
+                        '@Counted(name = "api_calls_total", absolute = true)',
+                        '@Timed(name = "api_call_duration", unit = MetricUnits.MILLISECONDS)'
+                    ]
+                },
+                implementation: {
+                    correlationIdHeader: 'X-Correlation-ID',
+                    propagateToUpstream: true,
+                    recordEveryCall: true,
+                    aggregateBy: 'correlationId',
+                    prometheusMetrics: {
+                        enabled: true,
+                        endpoint: '/metrics'
+                    }
+                }
+            };
+        }
+
+        operation.parameters = consolidation.mergedParameters || [];
+        operation.responses = {
+            '200': {
                     description: 'Successful consolidated response',
                     content: {
                         'application/json': {
@@ -2641,17 +2689,39 @@ function switchAggregatorPreviewTab(tab) {
     if (tab === 'summary') {
         const pathsArray = Object.entries(aggregatedSpecPreview.paths || {});
         const endpoints = pathsArray.flatMap(([path, methods]) =>
-            Object.keys(methods).map(method => ({ method: method.toUpperCase(), path }))
+            Object.keys(methods).map(method => ({
+                method: method.toUpperCase(),
+                path,
+                hasTracking: methods[method]['x-api-call-tracking']?.enabled || false
+            }))
         );
+
+        const trackingEnabled = endpoints.some(ep => ep.hasTracking);
 
         contentDiv.innerHTML = `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
                 <h4 style="color: #111827; margin-bottom: 16px;">Consolidated Endpoints</h4>
+                ${trackingEnabled ? `
+                    <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: #059669;">
+                            <span style="font-size: 1.2rem;">📊</span>
+                            <strong>API Call Tracking Enabled</strong>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.9rem; color: #047857;">
+                            <div>• Grouped by: <strong>Correlation ID</strong> and <strong>API Name</strong></div>
+                            <div>• Metrics: <code style="background: white; padding: 2px 6px; border-radius: 3px;">api_calls_total</code>, <code style="background: white; padding: 2px 6px; border-radius: 3px;">api_calls_per_workflow</code></div>
+                            <div>• Prometheus endpoint: <code style="background: white; padding: 2px 6px; border-radius: 3px;">/metrics</code></div>
+                        </div>
+                    </div>
+                ` : ''}
                 <div style="display: grid; gap: 8px;">
                     ${endpoints.map(ep => `
                         <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #10B981;">
-                            <strong style="color: #10B981;">${ep.method}</strong>
-                            <code style="color: #4F46E5;">${ep.path}</code>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong style="color: #10B981;">${ep.method}</strong>
+                                <code style="color: #4F46E5;">${ep.path}</code>
+                                ${ep.hasTracking ? '<span style="background: #ECFDF5; color: #059669; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; margin-left: auto;">📊 Tracked</span>' : ''}
+                            </div>
                         </div>
                     `).join('')}
                 </div>
