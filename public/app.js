@@ -19,18 +19,38 @@ function updateJavaOptionsVisibility() {
     const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
     const javaSDKs = ['spring-boot', 'quarkus', 'quarkus-fullstack', 'spring-boot-client', 'quarkus-client'];
 
+    if (!javaOptions) {
+        console.warn('javaOptions element not found');
+        return;
+    }
+
     if (javaSDKs.includes(selectedSDK)) {
         javaOptions.classList.remove('hidden');
     } else {
         javaOptions.classList.add('hidden');
     }
+
+    // Ensure multiSpecConfig stays visible if it was already visible
+    const multiSpecConfig = document.getElementById('multiSpecConfig');
+    if (multiSpecConfig && parsedAPIs.length > 0 && multiSpecConfig.classList.contains('hidden')) {
+        console.log('Restoring multiSpecConfig visibility');
+        multiSpecConfig.classList.remove('hidden');
+    }
 }
 
-// Add event listeners to SDK type radio buttons
-const sdkTypeRadios = document.querySelectorAll('input[name="sdkType"]');
-sdkTypeRadios.forEach(radio => {
-    radio.addEventListener('change', updateJavaOptionsVisibility);
-});
+// Add event listeners to SDK type radio buttons (with delay to ensure DOM is ready)
+function initSDKRadioListeners() {
+    const sdkTypeRadios = document.querySelectorAll('input[name="sdkType"]');
+    sdkTypeRadios.forEach(radio => {
+        radio.addEventListener('change', updateJavaOptionsVisibility);
+    });
+    // Set initial visibility
+    updateJavaOptionsVisibility();
+}
+
+// Initialize on load and also try immediately
+initSDKRadioListeners();
+window.addEventListener('load', initSDKRadioListeners);
 
 // Toggle aggregator options visibility
 document.getElementById('enableAggregator')?.addEventListener('change', function() {
