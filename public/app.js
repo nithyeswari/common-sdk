@@ -2390,33 +2390,35 @@ function buildConsolidatedSpec() {
                 enabled: true,
                 groupBy: ['correlationId', 'apiName'],
                 description: 'Track how many times each API is called per workflow execution',
-                metrics: {
-                    counters: [
-                        {
-                            name: 'api_calls_total',
-                            description: 'Total number of API calls made',
-                            labels: ['correlation_id', 'api_name', 'method', 'path', 'status']
-                        },
-                        {
-                            name: 'api_calls_per_workflow',
-                            description: 'API calls grouped by correlation ID',
-                            labels: ['correlation_id', 'api_name']
-                        }
-                    ],
-                    javaAnnotations: [
-                        '@ApiCallTracking',
-                        '@MetricsTracked(groupBy = {"correlationId", "apiName"})',
-                        '@Counted(name = "api_calls_total", absolute = true)',
-                        '@Timed(name = "api_call_duration", unit = MetricUnits.MILLISECONDS)'
-                    ]
-                },
                 implementation: {
+                    method: 'logging',
                     correlationIdHeader: 'X-Correlation-ID',
                     propagateToUpstream: true,
-                    recordEveryCall: true,
-                    aggregateBy: 'correlationId',
-                    prometheusMetrics: {
+                    logLevel: 'INFO',
+                    logFormat: {
+                        template: 'API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration}',
+                        fields: ['correlationId', 'apiName', 'method', 'path', 'status', 'duration', 'timestamp']
+                    },
+                    aggregation: {
                         enabled: true,
+                        aggregateBy: 'correlationId',
+                        storage: 'in-memory',
+                        query: 'SELECT correlation_id, api_name, COUNT(*) as call_count FROM api_logs GROUP BY correlation_id, api_name'
+                    },
+                    metrics: {
+                        exportFormat: 'prometheus',
+                        counters: [
+                            {
+                                name: 'api_calls_total',
+                                description: 'Total number of API calls made',
+                                labels: ['correlation_id', 'api_name', 'method', 'path', 'status']
+                            },
+                            {
+                                name: 'api_calls_per_workflow',
+                                description: 'API calls grouped by correlation ID',
+                                labels: ['correlation_id', 'api_name']
+                            }
+                        ],
                         endpoint: '/metrics'
                     }
                 }
@@ -2705,12 +2707,14 @@ function switchAggregatorPreviewTab(tab) {
                     <div style="background: #ECFDF5; border: 2px solid #10B981; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
                         <div style="display: flex; align-items: center; gap: 8px; color: #059669;">
                             <span style="font-size: 1.2rem;">📊</span>
-                            <strong>API Call Tracking Enabled</strong>
+                            <strong>API Call Tracking Enabled (Logging-based)</strong>
                         </div>
                         <div style="margin-top: 8px; font-size: 0.9rem; color: #047857;">
-                            <div>• Grouped by: <strong>Correlation ID</strong> and <strong>API Name</strong></div>
-                            <div>• Metrics: <code style="background: white; padding: 2px 6px; border-radius: 3px;">api_calls_total</code>, <code style="background: white; padding: 2px 6px; border-radius: 3px;">api_calls_per_workflow</code></div>
-                            <div>• Prometheus endpoint: <code style="background: white; padding: 2px 6px; border-radius: 3px;">/metrics</code></div>
+                            <div>• <strong>Method:</strong> Structured logging with INFO level</div>
+                            <div>• <strong>Grouped by:</strong> Correlation ID and API Name</div>
+                            <div>• <strong>Log format:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">API_CALL | correlation_id={id} | api_name={name} | method={method} | path={path} | status={code} | duration_ms={ms}</code></div>
+                            <div>• <strong>Aggregation query:</strong> <code style="background: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;">SELECT correlation_id, api_name, COUNT(*) FROM api_logs GROUP BY correlation_id, api_name</code></div>
+                            <div>• <strong>Metrics export:</strong> Prometheus at <code style="background: white; padding: 2px 6px; border-radius: 3px;">/metrics</code></div>
                         </div>
                     </div>
                 ` : ''}

@@ -297,23 +297,21 @@
                                 </label>
                                 <div id="apiTrackingOptions" class="tracking-options" style="margin-top: 12px; padding-left: 24px;">
                                     <div style="margin-bottom: 8px; color: #059669; font-size: 0.9rem;">
-                                        <strong>📈 Metrics Generated:</strong>
+                                        <strong>📝 Logging-based Implementation:</strong>
                                     </div>
-                                    <ul style="margin: 0; padding-left: 20px; color: #6B7280; font-size: 0.85rem;">
-                                        <li><code>api_calls_total</code> - Total API calls per workflow</li>
-                                        <li><code>api_calls_per_workflow</code> - Calls grouped by correlation ID</li>
-                                        <li><code>api_call_duration</code> - Duration metrics per call</li>
-                                    </ul>
                                     <div style="margin-top: 12px; padding: 10px; background: #F3F4F6; border-radius: 6px; font-size: 0.85rem;">
-                                        <strong>Java Annotations:</strong><br>
-                                        <code style="display: block; margin-top: 4px;">@ApiCallTracking</code>
-                                        <code style="display: block;">@MetricsTracked(groupBy = {"correlationId", "apiName"})</code>
-                                        <code style="display: block;">@Counted(name = "api_calls_total")</code>
+                                        <strong>Log Format:</strong><br>
+                                        <code style="display: block; margin-top: 4px; word-break: break-all;">API_CALL | correlation_id={id} | api_name={name} | method={method} | path={path} | status={code} | duration_ms={ms}</code>
                                     </div>
                                     <div style="margin-top: 12px; padding: 10px; background: #EEF2FF; border-radius: 6px; font-size: 0.85rem;">
-                                        <strong>Headers Used:</strong><br>
-                                        <code style="display: block; margin-top: 4px;">X-Correlation-ID</code> - Propagated to all upstream APIs
+                                        <strong>Aggregation Query:</strong><br>
+                                        <code style="display: block; margin-top: 4px;">SELECT correlation_id, api_name, COUNT(*) as call_count<br>FROM api_logs<br>GROUP BY correlation_id, api_name</code>
                                     </div>
+                                    <ul style="margin: 12px 0 0 0; padding-left: 20px; color: #6B7280; font-size: 0.85rem;">
+                                        <li><strong>Header:</strong> <code>X-Correlation-ID</code> propagated to upstream APIs</li>
+                                        <li><strong>Metrics:</strong> Exported to Prometheus at <code>/metrics</code></li>
+                                        <li><strong>Storage:</strong> In-memory aggregation for fast queries</li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
