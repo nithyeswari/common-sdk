@@ -748,6 +748,63 @@
         </footer>
     </div>
 
+    <!-- Upload Options Modal -->
+    <div id="uploadOptionsModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>What would you like to do?</h2>
+                <button class="modal-close" onclick="closeUploadOptionsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #6B7280; margin-bottom: 24px;">
+                    You've uploaded <strong id="uploadedSpecCount">0 spec(s)</strong>. Choose how you want to proceed:
+                </p>
+
+                <div class="option-cards">
+                    <!-- Option 1: Direct SDK Generation -->
+                    <div class="option-card" onclick="selectUploadOption('direct-generate')">
+                        <div class="option-icon">🚀</div>
+                        <div class="option-content">
+                            <h3>Generate SDK Directly</h3>
+                            <p>Skip to SDK generation with current configuration</p>
+                        </div>
+                        <div class="option-arrow">→</div>
+                    </div>
+
+                    <!-- Option 2: Spec Aggregator -->
+                    <div class="option-card" onclick="selectUploadOption('aggregator')">
+                        <div class="option-icon">🔀</div>
+                        <div class="option-content">
+                            <h3>Spec Aggregator (2-to-1)</h3>
+                            <p>Consolidate multiple endpoints into one aggregated API</p>
+                        </div>
+                        <div class="option-arrow">→</div>
+                    </div>
+
+                    <!-- Option 3: Main + Clients -->
+                    <div class="option-card" onclick="selectUploadOption('main-clients')">
+                        <div class="option-icon">🌐</div>
+                        <div class="option-content">
+                            <h3>Main Service + Clients</h3>
+                            <p>Generate main service with client SDKs for dependencies</p>
+                        </div>
+                        <div class="option-arrow">→</div>
+                    </div>
+
+                    <!-- Option 4: Configure First -->
+                    <div class="option-card" onclick="selectUploadOption('configure')">
+                        <div class="option-icon">⚙️</div>
+                        <div class="option-content">
+                            <h3>Configure Advanced Options</h3>
+                            <p>Set headers, business logic, and other advanced settings</p>
+                        </div>
+                        <div class="option-arrow">→</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="generator.js"></script>
     <script src="app.js"></script>
     <script src="spec-builder.js"></script>

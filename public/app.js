@@ -114,6 +114,51 @@ function showSpecsManager() {
     document.getElementById('multiSpecConfig').classList.remove('hidden');
 }
 
+// Show upload options modal
+function showUploadOptionsModal() {
+    const modal = document.getElementById('uploadOptionsModal');
+    const specCount = document.getElementById('uploadedSpecCount');
+
+    specCount.textContent = `${parsedAPIs.length} spec${parsedAPIs.length > 1 ? 's' : ''}`;
+    modal.classList.remove('hidden');
+}
+
+// Close upload options modal
+function closeUploadOptionsModal() {
+    const modal = document.getElementById('uploadOptionsModal');
+    modal.classList.add('hidden');
+}
+
+// Handle upload option selection
+function selectUploadOption(option) {
+    closeUploadOptionsModal();
+
+    switch (option) {
+        case 'direct-generate':
+            // Scroll to generate section
+            document.getElementById('uploadModeCard').scrollIntoView({ behavior: 'smooth' });
+            break;
+
+        case 'aggregator':
+            // Set strategy to aggregator and show configuration
+            selectedStrategy = 'aggregator';
+            showAggregationStrategyStep();
+            break;
+
+        case 'main-clients':
+            // Set strategy to main-clients and show configuration
+            selectedStrategy = 'main-clients';
+            showAggregationStrategyStep();
+            break;
+
+        case 'configure':
+            // Show the full specs manager with all options
+            showSpecsManager();
+            document.getElementById('multiSpecConfig').scrollIntoView({ behavior: 'smooth' });
+            break;
+    }
+}
+
 // Clear all saved specs
 function clearAllSpecs() {
     if (confirm('Are you sure you want to clear all uploaded specifications?')) {
@@ -137,6 +182,9 @@ fileInput.addEventListener('change', async (e) => {
             await parseAndAddSpecs(files);
             fileName.textContent = `${parsedAPIs.length} spec${parsedAPIs.length > 1 ? 's' : ''} loaded`;
             fileName.classList.add('selected');
+
+            // Show options modal after upload
+            showUploadOptionsModal();
         } catch (error) {
             console.error('Error parsing specs:', error);
             errorContainer.classList.remove('hidden');
@@ -168,9 +216,6 @@ async function parseAndAddSpecs(files) {
 
     // Save to sessionStorage
     saveSpecs();
-
-    // Show multi-spec config UI
-    showSpecsManager();
 
     // Update UI
     updateAPIList();
