@@ -2689,6 +2689,8 @@ function downloadAggregatedSpecNow() {
 }
 
 function populateAggregatorPreview(spec) {
+    console.log('populateAggregatorPreview called with spec:', spec);
+
     // Populate summary stats
     const summaryDiv = document.getElementById('previewSummaryAggregator');
     if (summaryDiv) {
@@ -2714,6 +2716,8 @@ function populateAggregatorPreview(spec) {
                 <span>Source APIs</span>
             </div>
         `;
+    } else {
+        console.error('previewSummaryAggregator element not found');
     }
 
     // Set initial tab to summary
@@ -2721,16 +2725,26 @@ function populateAggregatorPreview(spec) {
 }
 
 function switchAggregatorPreviewTab(tab) {
+    console.log('switchAggregatorPreviewTab called with tab:', tab);
+
     // Update tab buttons
     document.querySelectorAll('.preview-tab').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.onclick && btn.onclick.toString().includes(`'${tab}'`)) {
+        const btnText = btn.textContent.toLowerCase();
+        if ((tab === 'summary' && btnText.includes('summary')) ||
+            (tab === 'yaml' && btnText.includes('spec')) ||
+            (tab === 'code' && btnText.includes('code'))) {
             btn.classList.add('active');
         }
     });
 
     const contentDiv = document.getElementById('previewTabContentAggregator');
-    if (!contentDiv) return;
+    if (!contentDiv) {
+        console.error('previewTabContentAggregator element not found');
+        return;
+    }
+
+    console.log('contentDiv found, displaying tab:', tab);
 
     if (tab === 'summary') {
         const pathsArray = Object.entries(aggregatedSpecPreview.paths || {});
