@@ -1,0 +1,81 @@
+openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+  description: Test API for header propagation
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users
+      tags:
+        - Users
+      parameters:
+        - name: X-API-Version
+          in: header
+          required: true
+          schema:
+            type: string
+          description: API version
+        - name: X-Client-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Client identifier
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    get:
+      operationId: getUserById
+      summary: Get user by ID
+      tags:
+        - Users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Tenant-ID
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Tenant identifier
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string

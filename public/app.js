@@ -14,6 +14,42 @@ const successContainer = document.getElementById('successContainer');
 const sdkTypeCheckboxes = document.querySelectorAll('input[name="sdkType"]');
 const javaOptions = document.getElementById('javaOptions');
 
+// State for multi-spec configuration (must be declared before functions that use them)
+let parsedAPIs = [];
+let allHeaders = new Set();
+let selectedHeaders = {};
+let mainAPIIndex = 0;
+let endpointMergeConfig = {}; // { path: { method: 'merge'|'keep-first'|'keep-all', sourceSpecs: [...] } }
+let payloadMappings = []; // [{ sourceSpec, targetSpec, sourceField, targetField, transformFn }]
+let selectedStrategy = 'merge-all';
+let aggregatedSpecPreview = null;
+
+// SessionStorage keys
+const STORAGE_KEYS = {
+    SPECS: 'openapi_specs',
+    MAIN_INDEX: 'main_api_index',
+    HEADERS: 'selected_headers',
+    BUSINESS_LOGIC: 'business_logic',
+    ENDPOINT_MERGE: 'endpoint_merge_config',
+    PAYLOAD_MAPPINGS: 'payload_mappings'
+};
+
+// Set version timestamp
+(function setVersionTimestamp() {
+    const timestampEl = document.getElementById('versionTimestamp');
+    if (timestampEl) {
+        const now = new Date();
+        const formatted = now.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        timestampEl.textContent = formatted;
+    }
+})();
+
 // Toggle Java options visibility based on SDK type selection
 function updateJavaOptionsVisibility() {
     const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
@@ -53,7 +89,7 @@ initSDKRadioListeners();
 window.addEventListener('load', initSDKRadioListeners);
 
 // Toggle aggregator options visibility
-document.getElementById('enableAggregator')?.addEventListener('change', function() {
+document.getElementById('enableAggregator')?.addEventListener('change', function () {
     const aggregatorOptions = document.getElementById('aggregatorOptions');
     if (this.checked) {
         aggregatorOptions.classList.remove('hidden');
@@ -61,26 +97,6 @@ document.getElementById('enableAggregator')?.addEventListener('change', function
         aggregatorOptions.classList.add('hidden');
     }
 });
-
-// State for multi-spec configuration
-let parsedAPIs = [];
-let allHeaders = new Set();
-let selectedHeaders = {};
-let mainAPIIndex = 0;
-let endpointMergeConfig = {}; // { path: { method: 'merge'|'keep-first'|'keep-all', sourceSpecs: [...] } }
-let payloadMappings = []; // [{ sourceSpec, targetSpec, sourceField, targetField, transformFn }]
-let selectedStrategy = 'merge-all';
-let aggregatedSpecPreview = null;
-
-// SessionStorage keys
-const STORAGE_KEYS = {
-    SPECS: 'openapi_specs',
-    MAIN_INDEX: 'main_api_index',
-    HEADERS: 'selected_headers',
-    BUSINESS_LOGIC: 'business_logic',
-    ENDPOINT_MERGE: 'endpoint_merge_config',
-    PAYLOAD_MAPPINGS: 'payload_mappings'
-};
 
 // Load saved specs from sessionStorage on page load
 function loadSavedSpecs() {
@@ -754,14 +770,14 @@ function closeSpecPreviewModal() {
 document.getElementById('closePreviewModal')?.addEventListener('click', closeSpecPreviewModal);
 
 // Close modal when clicking outside content
-document.getElementById('specPreviewModal')?.addEventListener('click', function(e) {
+document.getElementById('specPreviewModal')?.addEventListener('click', function (e) {
     if (e.target === this) {
         closeSpecPreviewModal();
     }
 });
 
 // Copy to clipboard
-document.getElementById('copySpecContent')?.addEventListener('click', function() {
+document.getElementById('copySpecContent')?.addEventListener('click', function () {
     navigator.clipboard.writeText(currentSpecYaml).then(() => {
         const originalText = this.textContent;
         this.textContent = 'Copied! ✓';
@@ -775,7 +791,7 @@ document.getElementById('copySpecContent')?.addEventListener('click', function()
 });
 
 // Download from preview
-document.getElementById('downloadSpecFromPreview')?.addEventListener('click', function() {
+document.getElementById('downloadSpecFromPreview')?.addEventListener('click', function () {
     const blob = new Blob([currentSpecYaml], { type: 'text/yaml' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -788,14 +804,14 @@ document.getElementById('downloadSpecFromPreview')?.addEventListener('click', fu
 });
 
 // ESC key to close modal
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         closeSpecPreviewModal();
     }
 });
 
 // Scan for duplicate endpoints across specs
-document.getElementById('scanForDuplicates')?.addEventListener('click', function() {
+document.getElementById('scanForDuplicates')?.addEventListener('click', function () {
     scanForDuplicateEndpoints();
 });
 
@@ -936,7 +952,7 @@ function updateMergeStrategy(pathKey, strategy) {
 }
 
 // Add payload mapping
-document.getElementById('addPayloadMapping')?.addEventListener('click', function() {
+document.getElementById('addPayloadMapping')?.addEventListener('click', function () {
     addPayloadMapping();
 });
 
@@ -1426,11 +1442,11 @@ function applyConsolidation() {
     const params1 = operation1.parameters || [];
     const params2 = operation2.parameters || [];
 
-    params1.forEach(p => mergedParameters.push({...p, source: api1.title || api1.fileName}));
+    params1.forEach(p => mergedParameters.push({ ...p, source: api1.title || api1.fileName }));
     params2.forEach(p2 => {
         const existing = mergedParameters.find(p1 => p1.name === p2.name && p1.in === p2.in);
         if (!existing) {
-            mergedParameters.push({...p2, source: api2.title || api2.fileName});
+            mergedParameters.push({ ...p2, source: api2.title || api2.fileName });
         }
     });
 
@@ -1597,7 +1613,7 @@ function closeConsolidationModal() {
 }
 
 // Create Main Service from Client Specs
-document.getElementById('createMainFromClients')?.addEventListener('click', function() {
+document.getElementById('createMainFromClients')?.addEventListener('click', function () {
     if (parsedAPIs.length < 2) {
         alert('Please upload at least 2 client API specs to create a consolidated main service');
         return;
@@ -2156,15 +2172,42 @@ function proceedToSpecManager() {
     }
 }
 
+function showAggregationStrategyStep() {
+    // Hide all other steps (with null checks)
+    const aggregatorConfigStep = document.getElementById('aggregatorConfigStep');
+    const mainClientConfigStep = document.getElementById('mainClientConfigStep');
+    const aggregationLogicStep = document.getElementById('aggregationLogicStep');
+    const aggregatorPreviewStep = document.getElementById('aggregatorPreviewStep');
+    const aggregationStrategyStep = document.getElementById('aggregationStrategyStep');
+
+    if (aggregatorConfigStep) aggregatorConfigStep.classList.add('hidden');
+    if (mainClientConfigStep) mainClientConfigStep.classList.add('hidden');
+    if (aggregationLogicStep) aggregationLogicStep.classList.add('hidden');
+    if (aggregatorPreviewStep) aggregatorPreviewStep.classList.add('hidden');
+
+    // Show strategy selection step
+    if (aggregationStrategyStep) {
+        aggregationStrategyStep.classList.remove('hidden');
+        aggregationStrategyStep.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
 function backToStrategy() {
-    // Hide all config steps
-    document.getElementById('aggregatorConfigStep').classList.add('hidden');
-    document.getElementById('mainClientConfigStep').classList.add('hidden');
-    document.getElementById('aggregationLogicStep').classList.add('hidden');
+    // Hide all config steps (with null checks)
+    const aggregatorConfigStep = document.getElementById('aggregatorConfigStep');
+    const mainClientConfigStep = document.getElementById('mainClientConfigStep');
+    const aggregationLogicStep = document.getElementById('aggregationLogicStep');
+    const aggregationStrategyStep = document.getElementById('aggregationStrategyStep');
+
+    if (aggregatorConfigStep) aggregatorConfigStep.classList.add('hidden');
+    if (mainClientConfigStep) mainClientConfigStep.classList.add('hidden');
+    if (aggregationLogicStep) aggregationLogicStep.classList.add('hidden');
 
     // Show strategy step
-    document.getElementById('aggregationStrategyStep').classList.remove('hidden');
-    document.getElementById('aggregationStrategyStep').scrollIntoView({ behavior: 'smooth' });
+    if (aggregationStrategyStep) {
+        aggregationStrategyStep.classList.remove('hidden');
+        aggregationStrategyStep.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 function proceedToAggregationLogic() {
@@ -2174,14 +2217,24 @@ function proceedToAggregationLogic() {
         return;
     }
 
-    // Hide aggregator config, show aggregation logic step
-    document.getElementById('aggregatorConfigStep').classList.add('hidden');
-    document.getElementById('aggregationLogicStep').classList.remove('hidden');
+    // Hide aggregator config, show aggregation logic step (with null checks)
+    const aggregatorConfigStep = document.getElementById('aggregatorConfigStep');
+    const aggregationLogicStep = document.getElementById('aggregationLogicStep');
 
-    // Populate consolidations summary
-    populateConsolidationsSummary();
+    if (aggregatorConfigStep) aggregatorConfigStep.classList.add('hidden');
 
-    document.getElementById('aggregationLogicStep').scrollIntoView({ behavior: 'smooth' });
+    if (aggregationLogicStep) {
+        aggregationLogicStep.classList.remove('hidden');
+
+        // Populate consolidations summary
+        populateConsolidationsSummary();
+
+        aggregationLogicStep.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        console.warn('aggregationLogicStep element not found, skipping to preview');
+        // If the element doesn't exist, go directly to preview
+        proceedToPreview();
+    }
 }
 
 function populateConsolidationsSummary() {
@@ -2361,6 +2414,8 @@ function addAggregatorCustomHeader() {
 }
 
 async function proceedToPreview() {
+    console.log('proceedToPreview called, consolidationRules:', consolidationRules);
+
     // Validate consolidations
     if (consolidationRules.length === 0) {
         alert('Please create at least one consolidated endpoint (2-to-1) before proceeding');
@@ -2369,20 +2424,63 @@ async function proceedToPreview() {
 
     try {
         // Build aggregated spec directly from consolidation rules
+        console.log('Building consolidated spec...');
         aggregatedSpecPreview = buildConsolidatedSpec();
+        console.log('Built spec:', aggregatedSpecPreview);
+
+        // Ensure multiSpecConfig is visible (parent container)
+        const multiSpecConfig = document.getElementById('multiSpecConfig');
+        if (multiSpecConfig) {
+            multiSpecConfig.classList.remove('hidden');
+            console.log('multiSpecConfig made visible');
+        }
 
         // Hide aggregator config, show preview step
-        document.getElementById('aggregatorConfigStep').classList.add('hidden');
-        document.getElementById('aggregatorPreviewStep').classList.remove('hidden');
+        const configStep = document.getElementById('aggregatorConfigStep');
+        const previewStep = document.getElementById('aggregatorPreviewStep');
+        const previewStep2 = document.getElementById('previewStep');
+        console.log('Config step element:', configStep);
+        console.log('Preview step element:', previewStep);
+        console.log('Preview step classes before:', previewStep?.className);
+
+        if (configStep) {
+            configStep.classList.add('hidden');
+            configStep.style.display = 'none';
+        }
+        if (previewStep2) {
+            previewStep2.className = previewStep2.className.replace(/\bhidden\b/g, '').trim();
+            console.log('Preview step classes after:', previewStep2.className);
+        }
+        if (previewStep) {
+            previewStep.className = previewStep.className.replace(/\bhidden\b/g, '').trim();
+            console.log('Preview step classes after:', previewStep.className);
+        } else {
+            console.error('aggregatorPreviewStep element not found!');
+            return;
+        }
 
         // Populate consolidations summary
+        console.log('Populating consolidations summary...');
         populateConsolidationsSummary();
 
         // Populate preview
+        console.log('Populating aggregator preview...');
         populateAggregatorPreview(aggregatedSpecPreview);
 
+        // Initialize SDK type radio button listeners in preview step
+        console.log('Initializing SDK radio listeners...');
+        initSDKRadioListeners();
+        updateJavaOptionsVisibility();
+
         // Scroll to view
-        document.getElementById('aggregatorPreviewStep').scrollIntoView({ behavior: 'smooth' });
+        console.log('Scrolling to preview step...');
+        setTimeout(() => {
+            if (previewStep) {
+                previewStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 100);
+
+        console.log('Preview setup complete!');
     } catch (error) {
         alert('Error generating preview: ' + error.message);
         console.error('Preview error:', error);
@@ -2432,7 +2530,6 @@ function buildConsolidatedSpec() {
             description: descriptionText,
             operationId: consolidation.operationId || `consolidated_${method}_${path.replace(/\//g, '_').replace(/[{}]/g, '')}`,
             'x-consolidation': {
-                type: '2-to-1',
                 sources: [
                     {
                         api: consolidation.endpoint1.api,
@@ -2444,12 +2541,11 @@ function buildConsolidatedSpec() {
                         method: consolidation.endpoint2.operation.method,
                         path: consolidation.endpoint2.operation.path
                     }
-                ],
-                rules: consolidation.rules
+                ]
             }
         };
 
-        // Add API call tracking extension if enabled
+        // Add API call tracking extension if enabled (annotation-based, configured via properties)
         if (enableApiCallTracking) {
             operation['x-api-call-tracking'] = {
                 enabled: true,
@@ -2461,30 +2557,7 @@ function buildConsolidatedSpec() {
                     propagateToUpstream: true,
                     logLevel: 'INFO',
                     logFormat: {
-                        template: 'API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration}',
-                        fields: ['correlationId', 'apiName', 'method', 'path', 'status', 'duration', 'timestamp']
-                    },
-                    aggregation: {
-                        enabled: true,
-                        aggregateBy: 'correlationId',
-                        storage: 'in-memory',
-                        query: 'SELECT correlation_id, api_name, COUNT(*) as call_count FROM api_logs GROUP BY correlation_id, api_name'
-                    },
-                    metrics: {
-                        exportFormat: 'prometheus',
-                        counters: [
-                            {
-                                name: 'api_calls_total',
-                                description: 'Total number of API calls made',
-                                labels: ['correlation_id', 'api_name', 'method', 'path', 'status']
-                            },
-                            {
-                                name: 'api_calls_per_workflow',
-                                description: 'API calls grouped by correlation ID',
-                                labels: ['correlation_id', 'api_name']
-                            }
-                        ],
-                        endpoint: '/metrics'
+                        template: 'API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration}'
                     }
                 }
             };
@@ -2847,7 +2920,7 @@ function switchAggregatorPreviewTab(tab) {
                         <strong style="font-size: 1.1rem;">Code Preview: ${sdkNames[selectedSDK]}</strong>
                     </div>
                     <p style="color: #6366F1; margin: 0; font-size: 0.9rem;">
-                        Click "Download & Generate SDKs" below to generate the complete code package
+                        Select your SDK type below, then click "Generate SDK" to create the complete code package
                     </p>
                 </div>
 
@@ -2887,13 +2960,13 @@ function switchAggregatorPreviewTab(tab) {
                         <h4 style="color: #111827; margin: 0 0 12px 0;">🔌 API Endpoints (${Object.keys(aggregatedSpecPreview.paths).length})</h4>
                         <div style="display: grid; gap: 8px;">
                             ${Object.entries(aggregatedSpecPreview.paths).map(([path, methods]) =>
-                                Object.keys(methods).map(method => `
+            Object.keys(methods).map(method => `
                                     <div style="font-family: monospace; font-size: 0.9rem; padding: 8px; background: white; border-radius: 4px; border: 1px solid #E5E7EB;">
                                         <span style="color: #10B981; font-weight: bold;">${method.toUpperCase()}</span>
                                         <span style="color: #6B7280;">${path}</span>
                                     </div>
                                 `).join('')
-                            ).join('')}
+        ).join('')}
                         </div>
                     </div>
                 ` : ''}

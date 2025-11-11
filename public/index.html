@@ -24,6 +24,7 @@
                 <span class="version-label">Version</span>
                 <span class="version-number">2.0.0</span>
                 <span class="version-status">Deployed</span>
+                <span class="version-timestamp" id="versionTimestamp"></span>
             </div>
         </header>
 
@@ -59,71 +60,6 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>SDK Type to Generate <span style="color: #6B7280; font-weight: normal; font-size: 0.9rem;">(Select one)</span></label>
-                    <div class="sdk-types">
-                        <label class="sdk-type-option">
-                            <input type="radio" name="sdkType" value="react" checked>
-                            <span class="sdk-type-label">
-                                <strong>React + Redux SDK</strong>
-                                <small>TypeScript client with RTK Query & Redux Toolkit</small>
-                            </span>
-                        </label>
-                        <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
-                            <input type="radio" name="sdkType" value="quarkus-fullstack">
-                            <span class="sdk-type-label">
-                                <strong>Quarkus Full Stack ⚡</strong>
-                                <small>Backend + Client SDK with automatic header propagation for inter-service calls</small>
-                            </span>
-                        </label>
-                        <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                            <input type="radio" name="sdkType" value="spring-boot-client">
-                            <span class="sdk-type-label">
-                                <strong>Spring Boot Client 🔗</strong>
-                                <small>Java client library to call this API from another Spring Boot service</small>
-                            </span>
-                        </label>
-                        <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                            <input type="radio" name="sdkType" value="quarkus-client">
-                            <span class="sdk-type-label">
-                                <strong>Quarkus Client 🔗</strong>
-                                <small>Java client library to call this API from another Quarkus service</small>
-                            </span>
-                        </label>
-                    </div>
-                    <small style="color: #4F46E5; margin-top: 8px; display: block;">
-                        💡 <strong>Note:</strong> Select ONE SDK type to generate. Client SDKs generate REST client code for microservice-to-microservice communication
-                    </small>
-                </div>
-
-                <div id="javaOptions" class="java-options hidden">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="packageName">Java Package Name</label>
-                            <input type="text" id="packageName" name="packageName" placeholder="com.example.api">
-                            <small>Base package for generated Java code</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="groupId">Maven Group ID</label>
-                            <input type="text" id="groupId" name="groupId" placeholder="com.example">
-                            <small>Maven project group ID</small>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="artifactId">Maven Artifact ID</label>
-                            <input type="text" id="artifactId" name="artifactId" placeholder="api-service">
-                            <small>Maven project artifact ID</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="javaVersion">Java Version</label>
-                            <select id="javaVersion" name="javaVersion">
-                                <option value="17">Java 17</option>
-                                <option value="21" selected>Java 21</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Multi-Spec Configuration (hidden by default) -->
                 <div id="multiSpecConfig" class="multi-spec-config hidden">
@@ -475,6 +411,76 @@
                                 </div>
                             </div>
 
+                            <!-- SDK Type Selection (moved from upload form) -->
+                            <div class="form-group" style="margin-top: 24px;">
+                                <label class="section-label">🛠️ SDK Type to Generate <span style="color: #6B7280; font-weight: normal; font-size: 0.9rem;">(Select one)</span></label>
+                                <p class="section-description">
+                                    Choose which SDK you want to generate from the consolidated spec
+                                </p>
+                                <div class="sdk-types">
+                                    <label class="sdk-type-option">
+                                        <input type="radio" name="sdkType" value="react" checked>
+                                        <span class="sdk-type-label">
+                                            <strong>React + Redux SDK</strong>
+                                            <small>TypeScript client with RTK Query & Redux Toolkit</small>
+                                        </span>
+                                    </label>
+                                    <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
+                                        <input type="radio" name="sdkType" value="quarkus-fullstack">
+                                        <span class="sdk-type-label">
+                                            <strong>Quarkus Full Stack ⚡</strong>
+                                            <small>Backend + Client SDK with automatic header propagation for inter-service calls</small>
+                                        </span>
+                                    </label>
+                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
+                                        <input type="radio" name="sdkType" value="spring-boot-client">
+                                        <span class="sdk-type-label">
+                                            <strong>Spring Boot Client 🔗</strong>
+                                            <small>Java client library to call this API from another Spring Boot service</small>
+                                        </span>
+                                    </label>
+                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
+                                        <input type="radio" name="sdkType" value="quarkus-client">
+                                        <span class="sdk-type-label">
+                                            <strong>Quarkus Client 🔗</strong>
+                                            <small>Java client library to call this API from another Quarkus service</small>
+                                        </span>
+                                    </label>
+                                </div>
+                                <small style="color: #4F46E5; margin-top: 8px; display: block;">
+                                    💡 <strong>Note:</strong> Select ONE SDK type to generate. Client SDKs generate REST client code for microservice-to-microservice communication
+                                </small>
+                            </div>
+
+                            <div id="javaOptions" class="java-options hidden" style="margin-top: 16px;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="packageName">Java Package Name</label>
+                                        <input type="text" id="packageName" name="packageName" placeholder="com.example.api">
+                                        <small>Base package for generated Java code</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="groupId">Maven Group ID</label>
+                                        <input type="text" id="groupId" name="groupId" placeholder="com.example">
+                                        <small>Maven project group ID</small>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="artifactId">Maven Artifact ID</label>
+                                        <input type="text" id="artifactId" name="artifactId" placeholder="api-service">
+                                        <small>Maven project artifact ID</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="javaVersion">Java Version</label>
+                                        <select id="javaVersion" name="javaVersion">
+                                            <option value="17">Java 17</option>
+                                            <option value="21" selected>Java 21</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="preview-actions">
                                 <button type="button" onclick="downloadAggregatedSpecNow()" class="btn-secondary">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -489,7 +495,7 @@
                                         <polyline points="16 18 22 12 16 6"></polyline>
                                         <polyline points="8 6 2 12 8 18"></polyline>
                                     </svg>
-                                    Download & Generate SDKs
+                                    Generate SDK
                                 </button>
                             </div>
                         </div>
