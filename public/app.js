@@ -133,10 +133,13 @@ function closeUploadOptionsModal() {
 function selectUploadOption(option) {
     closeUploadOptionsModal();
 
+    // Always show spec manager for all options
+    showSpecsManager();
+
     switch (option) {
         case 'direct-generate':
-            // Scroll to generate section
-            document.getElementById('uploadModeCard').scrollIntoView({ behavior: 'smooth' });
+            // Show spec manager and scroll to it
+            document.getElementById('multiSpecConfig').scrollIntoView({ behavior: 'smooth' });
             break;
 
         case 'aggregator':
@@ -153,7 +156,6 @@ function selectUploadOption(option) {
 
         case 'configure':
             // Show the full specs manager with all options
-            showSpecsManager();
             document.getElementById('multiSpecConfig').scrollIntoView({ behavior: 'smooth' });
             break;
     }
