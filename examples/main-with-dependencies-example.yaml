@@ -13,29 +13,141 @@ x-dependencies:
       source: https://api.example.com/specs/user-service.yaml
       version: 2.1.0
       required: true
+      apiDetails:
+        baseUrl: https://users.example.com/api/v2
+        authentication:
+          type: bearer
+          location: header
+          headerName: Authorization
+        rateLimit:
+          requestsPerSecond: 100
+          requestsPerMinute: 5000
+          burstLimit: 150
+        timeout: 3000
+        retryPolicy:
+          maxRetries: 3
+          backoffStrategy: exponential
+        healthCheck:
+          endpoint: /health
+          method: GET
+          expectedStatus: 200
       endpoints:
         - path: /users/{id}
           method: GET
+          operationId: getUserById
+          description: Fetch user details by ID
+          parameters:
+            - name: id
+              in: path
+              required: true
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                id: {type: string}
+                name: {type: string}
+                email: {type: string}
+          estimatedLatency: 150
+          cacheable: true
+          cachePolicy:
+            ttl: 300
+            strategy: redis
+
         - path: /users
           method: POST
+          operationId: createUser
+          description: Create a new user
+          expectedResponse:
+            statusCode: 201
+          estimatedLatency: 200
+          cacheable: false
 
     - name: OrderServiceClient
       source: https://api.example.com/specs/order-service.yaml
       version: 1.5.3
       required: true
+      apiDetails:
+        baseUrl: https://orders.example.com/api/v1
+        authentication:
+          type: apiKey
+          location: header
+          headerName: X-API-Key
+        rateLimit:
+          requestsPerSecond: 50
+          requestsPerMinute: 2000
+          burstLimit: 75
+        timeout: 5000
+        retryPolicy:
+          maxRetries: 2
+          backoffStrategy: linear
+        healthCheck:
+          endpoint: /health
+          method: GET
+          expectedStatus: 200
       endpoints:
         - path: /orders/{id}
           method: GET
+          operationId: getOrderById
+          description: Fetch order details
+          parameters:
+            - name: id
+              in: path
+              required: true
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                orderId: {type: string}
+                items: {type: array}
+                total: {type: number}
+          estimatedLatency: 250
+          cacheable: true
+          cachePolicy:
+            ttl: 60
+            strategy: memory
+
         - path: /orders
           method: POST
+          operationId: createOrder
+          description: Create a new order
+          expectedResponse:
+            statusCode: 201
+          estimatedLatency: 300
+          cacheable: false
 
     - name: NotificationServiceClient
       source: https://api.example.com/specs/notification-service.yaml
       version: 1.0.0
       required: false
+      apiDetails:
+        baseUrl: https://notifications.example.com/api/v1
+        authentication:
+          type: bearer
+          location: header
+          headerName: Authorization
+        rateLimit:
+          requestsPerSecond: 20
+          requestsPerMinute: 1000
+          burstLimit: 30
+        timeout: 2000
+        retryPolicy:
+          maxRetries: 1
+          backoffStrategy: fixed
+        healthCheck:
+          endpoint: /ping
+          method: GET
+          expectedStatus: 200
       endpoints:
         - path: /notifications/send
           method: POST
+          operationId: sendNotification
+          description: Send notification to user
+          expectedResponse:
+            statusCode: 202
+          estimatedLatency: 100
+          cacheable: false
 
 paths:
   /api/user-orders:

@@ -13,21 +13,117 @@ x-dependencies:
       source: ./specs/payment-service.yaml
       version: 1.2.0
       required: true
+      apiDetails:
+        baseUrl: https://payments.example.com/api/v1
+        authentication:
+          type: oauth2
+          location: header
+          headerName: Authorization
+        rateLimit:
+          requestsPerSecond: 200
+          requestsPerMinute: 10000
+          burstLimit: 300
+        timeout: 10000
+        retryPolicy:
+          maxRetries: 3
+          backoffStrategy: exponential
+        healthCheck:
+          endpoint: /health
+          method: GET
+          expectedStatus: 200
       endpoints:
         - path: /payments/validate
           method: POST
+          operationId: validatePayment
+          description: Validate payment method and check available funds
+          parameters:
+            - name: X-Idempotency-Key
+              in: header
+              required: true
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                valid: {type: boolean}
+                availableFunds: {type: number}
+                reason: {type: string}
+          estimatedLatency: 500
+          cacheable: false
+
         - path: /payments/process
           method: POST
+          operationId: processPayment
+          description: Process the actual payment transaction
+          parameters:
+            - name: X-Idempotency-Key
+              in: header
+              required: true
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                transactionId: {type: string}
+                status: {type: string}
+                amount: {type: number}
+          estimatedLatency: 800
+          cacheable: false
 
     - name: InventoryServiceClient
       source: ./specs/inventory-service.yaml
       version: 2.0.1
       required: true
+      apiDetails:
+        baseUrl: https://inventory.example.com/api/v2
+        authentication:
+          type: bearer
+          location: header
+          headerName: Authorization
+        rateLimit:
+          requestsPerSecond: 150
+          requestsPerMinute: 8000
+          burstLimit: 200
+        timeout: 5000
+        retryPolicy:
+          maxRetries: 2
+          backoffStrategy: linear
+        healthCheck:
+          endpoint: /status
+          method: GET
+          expectedStatus: 200
       endpoints:
         - path: /inventory/check
           method: POST
+          operationId: checkInventory
+          description: Check product availability in warehouse
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                available: {type: boolean}
+                quantity: {type: integer}
+                warehouse: {type: string}
+          estimatedLatency: 300
+          cacheable: true
+          cachePolicy:
+            ttl: 30
+            strategy: redis
+
         - path: /inventory/reserve
           method: POST
+          operationId: reserveInventory
+          description: Reserve inventory items for order
+          expectedResponse:
+            statusCode: 200
+            schema:
+              type: object
+              properties:
+                reservationId: {type: string}
+                expiresAt: {type: string}
+          estimatedLatency: 400
+          cacheable: false
 
 paths:
   /api/checkout:

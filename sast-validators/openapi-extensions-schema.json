@@ -271,14 +271,121 @@
                 "type": "boolean",
                 "description": "Whether this client spec is required"
               },
+              "apiDetails": {
+                "type": "object",
+                "description": "Detailed information about the client API",
+                "properties": {
+                  "baseUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Base URL of the client API"
+                  },
+                  "authentication": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["bearer", "apiKey", "oauth2", "basic", "none"]
+                      },
+                      "location": {
+                        "type": "string",
+                        "enum": ["header", "query", "cookie"]
+                      },
+                      "headerName": {
+                        "type": "string",
+                        "description": "Name of the authentication header"
+                      }
+                    }
+                  },
+                  "rateLimit": {
+                    "type": "object",
+                    "properties": {
+                      "requestsPerSecond": {"type": "number"},
+                      "requestsPerMinute": {"type": "number"},
+                      "burstLimit": {"type": "number"}
+                    }
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "description": "Default timeout in milliseconds"
+                  },
+                  "retryPolicy": {
+                    "type": "object",
+                    "properties": {
+                      "maxRetries": {"type": "integer", "minimum": 0},
+                      "backoffStrategy": {
+                        "type": "string",
+                        "enum": ["exponential", "linear", "fixed"]
+                      }
+                    }
+                  },
+                  "healthCheck": {
+                    "type": "object",
+                    "properties": {
+                      "endpoint": {"type": "string"},
+                      "method": {"type": "string"},
+                      "expectedStatus": {"type": "integer"}
+                    }
+                  }
+                }
+              },
               "endpoints": {
                 "type": "array",
                 "description": "Specific endpoints used from this client",
                 "items": {
                   "type": "object",
+                  "required": ["path", "method"],
                   "properties": {
-                    "path": {"type": "string"},
-                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]}
+                    "path": {
+                      "type": "string",
+                      "description": "API endpoint path"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+                    },
+                    "operationId": {
+                      "type": "string",
+                      "description": "Operation ID from the client spec"
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Purpose of using this endpoint"
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "description": "Parameters used from this endpoint",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {"type": "string"},
+                          "in": {"type": "string", "enum": ["query", "path", "header", "cookie"]},
+                          "required": {"type": "boolean"}
+                        }
+                      }
+                    },
+                    "expectedResponse": {
+                      "type": "object",
+                      "properties": {
+                        "statusCode": {"type": "integer"},
+                        "schema": {"type": "object"}
+                      }
+                    },
+                    "estimatedLatency": {
+                      "type": "integer",
+                      "description": "Expected latency in milliseconds"
+                    },
+                    "cacheable": {
+                      "type": "boolean",
+                      "description": "Whether responses can be cached"
+                    },
+                    "cachePolicy": {
+                      "type": "object",
+                      "properties": {
+                        "ttl": {"type": "integer", "description": "Time to live in seconds"},
+                        "strategy": {"type": "string", "enum": ["memory", "redis", "cdn"]}
+                      }
+                    }
                   }
                 }
               }
