@@ -1,0 +1,225 @@
+extends: spectral:oas
+rules:
+  # Spec Dependencies Rules
+  dependencies-type-valid:
+    description: x-dependencies type must be valid
+    message: "x-dependencies.type must be one of: main-with-clients, aggregator, standalone"
+    severity: error
+    given: $[x-dependencies]
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values:
+          - main-with-clients
+          - aggregator
+          - standalone
+
+  dependencies-clients-required:
+    description: Client specs must be specified when type is main-with-clients or aggregator
+    message: "x-dependencies with type '{type}' must specify clientSpecs array"
+    severity: error
+    given: $[x-dependencies][?(@.type == 'main-with-clients' || @.type == 'aggregator')]
+    then:
+      field: clientSpecs
+      function: truthy
+
+  client-spec-name:
+    description: Each client spec must have a name
+    message: "Client spec is missing required 'name' field"
+    severity: error
+    given: $[x-dependencies].clientSpecs[*]
+    then:
+      field: name
+      function: truthy
+
+  client-spec-source:
+    description: Each client spec must specify a source
+    message: "Client spec '{name}' is missing required 'source' field (URL or path)"
+    severity: error
+    given: $[x-dependencies].clientSpecs[*]
+    then:
+      field: source
+      function: truthy
+
+  client-spec-version:
+    description: Client spec should specify semantic version
+    message: "Client spec '{name}' should specify version in semver format (e.g., 1.0.0)"
+    severity: warn
+    given: $[x-dependencies].clientSpecs[*]
+    then:
+      field: version
+      function: pattern
+      functionOptions:
+        match: "^\\d+\\.\\d+\\.\\d+$"
+
+  consolidation-strategy-required:
+    description: Specs with dependencies should specify consolidation strategy
+    message: "x-dependencies should specify consolidationStrategy (2-to-1-aggregation, main-client-pattern, or none)"
+    severity: warn
+    given: $[x-dependencies][?(@.clientSpecs)]
+    then:
+      field: consolidationStrategy
+      function: enumeration
+      functionOptions:
+        values:
+          - 2-to-1-aggregation
+          - main-client-pattern
+          - none
+
+  # CO2 Emission Tracking Rules
+  co2-impact-required:
+    description: All endpoints must have CO2 impact tracking extension
+    message: "Endpoint is missing x-co2-impact extension for carbon footprint monitoring"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete]
+    then:
+      field: x-co2-impact
+      function: truthy
+
+  co2-impact-threshold:
+    description: CO2 impact should not exceed defined threshold
+    message: "CO2 impact ({{value}}g) exceeds recommended threshold of 50g per request"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-co2-impact.estimatedGramsPerRequest
+    then:
+      function: pattern
+      functionOptions:
+        match: "^([0-9]|[1-4][0-9]|50)$"
+
+  co2-tracking-enabled:
+    description: CO2 tracking must be enabled
+    message: "x-co2-impact.enabled must be set to true"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-co2-impact
+    then:
+      field: enabled
+      function: truthy
+
+  co2-method-specified:
+    description: CO2 calculation method must be specified
+    message: "CO2 calculation method is missing or invalid. Must be one of: cloud-carbon-coefficients, green-web-foundation, custom"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete].x-co2-impact
+    then:
+      field: calculationMethod
+      function: enumeration
+      functionOptions:
+        values:
+          - cloud-carbon-coefficients
+          - green-web-foundation
+          - custom
+
+  # API Call Tracking Rules
+  api-call-tracking-required:
+    description: All consolidated endpoints must have API call tracking
+    message: "Consolidated endpoint is missing x-api-call-tracking extension"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete][?(@.x-consolidation)]
+    then:
+      field: x-api-call-tracking
+      function: truthy
+
+  api-tracking-correlation-id:
+    description: API tracking must include correlation ID
+    message: "x-api-call-tracking must group by correlationId"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.groupBy
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          contains:
+            const: correlationId
+
+  api-tracking-method:
+    description: API tracking implementation method must be specified
+    message: "x-api-call-tracking.implementation.method must be 'logging' or 'metrics'"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation
+    then:
+      field: method
+      function: enumeration
+      functionOptions:
+        values:
+          - logging
+          - metrics
+
+  api-tracking-log-format:
+    description: Logging-based tracking must define log format
+    message: "API call tracking with logging method must specify logFormat.template"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation[?(@.method == 'logging')]
+    then:
+      field: logFormat.template
+      function: truthy
+
+  correlation-id-header:
+    description: Correlation ID header must be defined
+    message: "x-api-call-tracking must specify correlationIdHeader (typically X-Correlation-ID)"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation
+    then:
+      field: correlationIdHeader
+      function: truthy
+
+  # Consolidated Endpoint Rules
+  consolidation-tracking:
+    description: Consolidated endpoints should have both CO2 and API tracking
+    message: "Consolidated endpoint should have both x-co2-impact and x-api-call-tracking for complete observability"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete][?(@.x-consolidation)]
+    then:
+      - field: x-co2-impact
+        function: truthy
+      - field: x-api-call-tracking
+        function: truthy
+
+  # Metrics Export Rules
+  prometheus-metrics-enabled:
+    description: Prometheus metrics should be enabled for tracking
+    message: "Prometheus metrics export is recommended for production monitoring"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation.metrics
+    then:
+      field: enabled
+      function: truthy
+
+  metrics-endpoint-defined:
+    description: Metrics endpoint must be specified when metrics are enabled
+    message: "Metrics endpoint (typically /metrics) must be defined when Prometheus is enabled"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation.metrics[?(@.enabled == true)]
+    then:
+      field: endpoint
+      function: truthy
+
+  # Header Propagation Rules
+  correlation-id-propagation:
+    description: Correlation ID should propagate to upstream services
+    message: "correlationIdHeader should be propagated to upstream APIs for end-to-end tracing"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation
+    then:
+      field: propagateToUpstream
+      function: truthy
+
+  # Aggregation Rules
+  api-tracking-aggregation:
+    description: API tracking should define aggregation strategy
+    message: "API call tracking should specify aggregation configuration for workflow analysis"
+    severity: warn
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation
+    then:
+      field: aggregation
+      function: truthy
+
+  aggregation-query-defined:
+    description: Aggregation query must be defined
+    message: "Aggregation configuration must include a query for grouping API calls"
+    severity: error
+    given: $.paths.*[get,post,put,patch,delete].x-api-call-tracking.implementation.aggregation[?(@.enabled == true)]
+    then:
+      field: query
+      function: truthy

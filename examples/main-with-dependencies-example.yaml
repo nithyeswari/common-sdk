@@ -1,0 +1,211 @@
+openapi: 3.0.0
+info:
+  title: Main API with Client Dependencies
+  version: 1.0.0
+  description: Example of a main OpenAPI spec that depends on client specs
+
+# Spec Dependencies Extension
+x-dependencies:
+  type: main-with-clients
+  consolidationStrategy: main-client-pattern
+  clientSpecs:
+    - name: UserServiceClient
+      source: https://api.example.com/specs/user-service.yaml
+      version: 2.1.0
+      required: true
+      endpoints:
+        - path: /users/{id}
+          method: GET
+        - path: /users
+          method: POST
+
+    - name: OrderServiceClient
+      source: https://api.example.com/specs/order-service.yaml
+      version: 1.5.3
+      required: true
+      endpoints:
+        - path: /orders/{id}
+          method: GET
+        - path: /orders
+          method: POST
+
+    - name: NotificationServiceClient
+      source: https://api.example.com/specs/notification-service.yaml
+      version: 1.0.0
+      required: false
+      endpoints:
+        - path: /notifications/send
+          method: POST
+
+paths:
+  /api/user-orders:
+    get:
+      summary: Get user with their orders (calls UserServiceClient and OrderServiceClient)
+      operationId: getUserOrders
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+
+      # Dependency tracking
+      x-client-dependencies:
+        - clientName: UserServiceClient
+          endpoint: GET /users/{id}
+          purpose: Fetch user details
+        - clientName: OrderServiceClient
+          endpoint: GET /orders
+          purpose: Fetch user orders
+
+      # API Call Tracking
+      x-api-call-tracking:
+        enabled: true
+        groupBy: [correlationId, apiName]
+        description: Track calls to UserServiceClient and OrderServiceClient
+        implementation:
+          method: logging
+          correlationIdHeader: X-Correlation-ID
+          propagateToUpstream: true
+          logLevel: INFO
+          logFormat:
+            template: "API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration} | upstream_client={upstreamClient}"
+            fields: [correlationId, apiName, method, path, status, duration, timestamp, upstreamClient]
+          aggregation:
+            enabled: true
+            aggregateBy: correlationId
+            storage: in-memory
+            query: SELECT correlation_id, api_name, upstream_client, COUNT(*) as call_count FROM api_logs GROUP BY correlation_id, api_name, upstream_client
+          metrics:
+            enabled: true
+            exportFormat: prometheus
+            counters:
+              - name: api_calls_total
+                description: Total API calls including upstream clients
+                labels: [correlation_id, api_name, method, path, status, upstream_client]
+              - name: api_calls_per_workflow
+                description: API calls grouped by correlation ID and client
+                labels: [correlation_id, api_name, upstream_client]
+            endpoint: /metrics
+
+      # CO2 Emission Tracking
+      x-co2-impact:
+        enabled: true
+        estimatedGramsPerRequest: 35
+        calculationMethod: cloud-carbon-coefficients
+        breakdown:
+          network: 10
+          compute: 15
+          storage: 5
+          dataTransfer: 5
+        upstreamEmissions:
+          - client: UserServiceClient
+            estimatedGrams: 12
+          - client: OrderServiceClient
+            estimatedGrams: 18
+        mitigationStrategies:
+          - caching
+          - compression
+
+      responses:
+        '200':
+          description: User with orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                  orders:
+                    type: array
+                    items:
+                      type: object
+
+  /api/create-order-with-notification:
+    post:
+      summary: Create order and send notification (calls OrderServiceClient and NotificationServiceClient)
+      operationId: createOrderWithNotification
+
+      # Dependency tracking
+      x-client-dependencies:
+        - clientName: OrderServiceClient
+          endpoint: POST /orders
+          purpose: Create the order
+        - clientName: NotificationServiceClient
+          endpoint: POST /notifications/send
+          purpose: Send order confirmation
+          optional: true
+
+      # API Call Tracking
+      x-api-call-tracking:
+        enabled: true
+        groupBy: [correlationId, apiName]
+        implementation:
+          method: logging
+          correlationIdHeader: X-Correlation-ID
+          propagateToUpstream: true
+          logLevel: INFO
+          logFormat:
+            template: "API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | upstream_client={upstreamClient}"
+            fields: [correlationId, apiName, method, path, status, timestamp, upstreamClient]
+          aggregation:
+            enabled: true
+            aggregateBy: correlationId
+            storage: in-memory
+            query: SELECT correlation_id, COUNT(*) as call_count FROM api_logs GROUP BY correlation_id
+          metrics:
+            enabled: true
+            exportFormat: prometheus
+            counters:
+              - name: api_calls_total
+                description: Total API calls
+                labels: [correlation_id, api_name, upstream_client]
+            endpoint: /metrics
+
+      # CO2 Emission Tracking
+      x-co2-impact:
+        enabled: true
+        estimatedGramsPerRequest: 28
+        calculationMethod: cloud-carbon-coefficients
+        breakdown:
+          network: 8
+          compute: 12
+          storage: 3
+          dataTransfer: 5
+        upstreamEmissions:
+          - client: OrderServiceClient
+            estimatedGrams: 15
+          - client: NotificationServiceClient
+            estimatedGrams: 8
+            optional: true
+        mitigationStrategies:
+          - async-execution
+          - caching
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                  notificationSent:
+                    type: boolean

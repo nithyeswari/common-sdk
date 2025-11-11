@@ -1,0 +1,288 @@
+name: OpenAPI SAST - CO2 and API Tracking Validation
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  workflow_dispatch:
+
+jobs:
+  spectral-lint:
+    name: Spectral OpenAPI Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Find OpenAPI Specs
+        id: find-specs
+        run: |
+          echo "Finding OpenAPI specification files..."
+          find . -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -not -path "*/node_modules/*" \
+            -not -path "*/.git/*" \
+            -not -path "*/sast-validators/*" > specs.txt
+          cat specs.txt
+
+      - name: Run Spectral Linting
+        run: |
+          echo "Running Spectral linting on all OpenAPI specs..."
+          EXIT_CODE=0
+          while IFS= read -r spec_file; do
+            if [ -f "$spec_file" ]; then
+              echo "Validating: $spec_file"
+              spectral lint "$spec_file" --ruleset .spectral.yaml --format stylish || EXIT_CODE=$?
+            fi
+          done < specs.txt
+          exit $EXIT_CODE
+
+      - name: Generate Spectral Report
+        if: always()
+        run: |
+          echo "Generating detailed report..."
+          while IFS= read -r spec_file; do
+            if [ -f "$spec_file" ]; then
+              spectral lint "$spec_file" --ruleset .spectral.yaml --format json > "spectral-report-$(basename $spec_file).json" || true
+            fi
+          done < specs.txt
+
+      - name: Upload Spectral Reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: spectral-reports
+          path: spectral-report-*.json
+
+  schema-validation:
+    name: JSON Schema Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install AJV (JSON Schema Validator)
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate OpenAPI Extensions
+        run: |
+          echo "Validating OpenAPI extensions against schema..."
+          EXIT_CODE=0
+          find . -type f \( -name "*.yaml" -o -name "*.yml" \) \
+            -not -path "*/node_modules/*" \
+            -not -path "*/.git/*" \
+            -not -path "*/.spectral.yaml" | while read spec_file; do
+            if [ -f "$spec_file" ]; then
+              echo "Validating: $spec_file"
+              # Convert YAML to JSON for validation
+              npx js-yaml "$spec_file" > temp-spec.json || continue
+              ajv validate -s sast-validators/openapi-extensions-schema.json -d temp-spec.json --verbose || EXIT_CODE=$?
+              rm -f temp-spec.json
+            fi
+          done
+          exit $EXIT_CODE
+
+  co2-threshold-check:
+    name: CO2 Emission Threshold Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install js-yaml
+
+      - name: Check CO2 Thresholds
+        run: |
+          cat > check-co2.js << 'EOF'
+          const fs = require('fs');
+          const yaml = require('js-yaml');
+          const glob = require('glob');
+
+          const CO2_THRESHOLD = 50; // grams per request
+          const CO2_WARNING_THRESHOLD = 30;
+
+          let hasErrors = false;
+          let hasWarnings = false;
+
+          // Find all YAML files
+          const files = glob.sync('**/*.yaml', {
+            ignore: ['node_modules/**', '.git/**', '.spectral.yaml']
+          });
+
+          files.forEach(file => {
+            try {
+              const content = yaml.load(fs.readFileSync(file, 'utf8'));
+              if (!content.paths) return;
+
+              Object.entries(content.paths).forEach(([path, methods]) => {
+                Object.entries(methods).forEach(([method, operation]) => {
+                  if (operation['x-co2-impact']) {
+                    const co2 = operation['x-co2-impact'].estimatedGramsPerRequest;
+
+                    if (co2 > CO2_THRESHOLD) {
+                      console.error(`❌ ERROR: ${method.toUpperCase()} ${path} exceeds CO2 threshold: ${co2}g (limit: ${CO2_THRESHOLD}g)`);
+                      hasErrors = true;
+                    } else if (co2 > CO2_WARNING_THRESHOLD) {
+                      console.warn(`⚠️  WARNING: ${method.toUpperCase()} ${path} has high CO2 impact: ${co2}g`);
+                      hasWarnings = true;
+                    } else {
+                      console.log(`✅ PASS: ${method.toUpperCase()} ${path} CO2 impact: ${co2}g`);
+                    }
+
+                    // Check for mitigation strategies if above warning threshold
+                    if (co2 > CO2_WARNING_THRESHOLD) {
+                      if (!operation['x-co2-impact'].mitigationStrategies ||
+                          operation['x-co2-impact'].mitigationStrategies.length === 0) {
+                        console.error(`❌ ERROR: ${method.toUpperCase()} ${path} with high CO2 (${co2}g) must specify mitigation strategies`);
+                        hasErrors = true;
+                      }
+                    }
+                  }
+                });
+              });
+            } catch (err) {
+              // Skip non-OpenAPI files
+            }
+          });
+
+          if (hasErrors) {
+            console.error('\n❌ CO2 threshold validation failed');
+            process.exit(1);
+          } else if (hasWarnings) {
+            console.warn('\n⚠️  CO2 threshold validation passed with warnings');
+          } else {
+            console.log('\n✅ All CO2 thresholds within acceptable limits');
+          }
+          EOF
+
+          node check-co2.js
+
+  api-tracking-coverage:
+    name: API Tracking Coverage Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install js-yaml
+
+      - name: Check API Tracking Coverage
+        run: |
+          cat > check-tracking.js << 'EOF'
+          const fs = require('fs');
+          const yaml = require('js-yaml');
+          const glob = require('glob');
+
+          let totalEndpoints = 0;
+          let trackedEndpoints = 0;
+          let consolidatedEndpoints = 0;
+          let missingTracking = [];
+
+          const files = glob.sync('**/*.yaml', {
+            ignore: ['node_modules/**', '.git/**', '.spectral.yaml']
+          });
+
+          files.forEach(file => {
+            try {
+              const content = yaml.load(fs.readFileSync(file, 'utf8'));
+              if (!content.paths) return;
+
+              Object.entries(content.paths).forEach(([path, methods]) => {
+                Object.entries(methods).forEach(([method, operation]) => {
+                  if (typeof operation !== 'object') return;
+
+                  totalEndpoints++;
+
+                  const isConsolidated = !!operation['x-consolidation'];
+                  const hasTracking = !!operation['x-api-call-tracking'];
+
+                  if (isConsolidated) {
+                    consolidatedEndpoints++;
+                    if (!hasTracking) {
+                      console.error(`❌ CONSOLIDATED endpoint missing tracking: ${method.toUpperCase()} ${path}`);
+                      missingTracking.push({ file, path, method, type: 'consolidated' });
+                    } else {
+                      trackedEndpoints++;
+                    }
+                  } else if (hasTracking) {
+                    trackedEndpoints++;
+                  }
+                });
+              });
+            } catch (err) {
+              // Skip non-OpenAPI files
+            }
+          });
+
+          const coverage = totalEndpoints > 0 ? (trackedEndpoints / totalEndpoints * 100).toFixed(2) : 0;
+
+          console.log('\n📊 API Tracking Coverage Report:');
+          console.log(`   Total Endpoints: ${totalEndpoints}`);
+          console.log(`   Tracked Endpoints: ${trackedEndpoints}`);
+          console.log(`   Consolidated Endpoints: ${consolidatedEndpoints}`);
+          console.log(`   Coverage: ${coverage}%`);
+
+          if (missingTracking.length > 0) {
+            console.error(`\n❌ ${missingTracking.length} endpoint(s) missing required tracking`);
+            process.exit(1);
+          } else if (consolidatedEndpoints > 0) {
+            console.log('\n✅ All consolidated endpoints have tracking configured');
+          }
+          EOF
+
+          node check-tracking.js
+
+  security-summary:
+    name: Generate SAST Summary
+    runs-on: ubuntu-latest
+    needs: [spectral-lint, schema-validation, co2-threshold-check, api-tracking-coverage]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Generate Summary
+        run: |
+          echo "## 🔍 OpenAPI SAST Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Validation Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Spectral Linting: ${{ needs.spectral-lint.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Schema Validation: ${{ needs.schema-validation.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CO2 Threshold Check: ${{ needs.co2-threshold-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ API Tracking Coverage: ${{ needs.api-tracking-coverage.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Checks Performed:" >> $GITHUB_STEP_SUMMARY
+          echo "1. **CO2 Emission Tracking**: Validates x-co2-impact extensions" >> $GITHUB_STEP_SUMMARY
+          echo "2. **API Call Tracking**: Ensures x-api-call-tracking is present" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Threshold Enforcement**: CO2 limits and mitigation strategies" >> $GITHUB_STEP_SUMMARY
+          echo "4. **Coverage Analysis**: Tracking coverage across all endpoints" >> $GITHUB_STEP_SUMMARY

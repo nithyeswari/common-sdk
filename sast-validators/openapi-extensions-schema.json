@@ -1,0 +1,342 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenAPI Extensions Validation Schema",
+  "description": "JSON Schema for validating x-co2-impact and x-api-call-tracking extensions",
+  "definitions": {
+    "co2-impact": {
+      "type": "object",
+      "required": ["enabled", "estimatedGramsPerRequest", "calculationMethod"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether CO2 tracking is enabled"
+        },
+        "estimatedGramsPerRequest": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Estimated CO2 emissions in grams per request"
+        },
+        "calculationMethod": {
+          "type": "string",
+          "enum": [
+            "cloud-carbon-coefficients",
+            "green-web-foundation",
+            "custom"
+          ],
+          "description": "Method used to calculate CO2 emissions"
+        },
+        "breakdown": {
+          "type": "object",
+          "properties": {
+            "network": { "type": "number", "minimum": 0 },
+            "compute": { "type": "number", "minimum": 0 },
+            "storage": { "type": "number", "minimum": 0 },
+            "dataTransfer": { "type": "number", "minimum": 0 }
+          }
+        },
+        "mitigationStrategies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "caching",
+              "compression",
+              "cdn",
+              "efficient-queries",
+              "batch-processing"
+            ]
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "estimatedGramsPerRequest": {
+            "type": "number",
+            "minimum": 50
+          }
+        }
+      },
+      "then": {
+        "required": ["mitigationStrategies"],
+        "properties": {
+          "mitigationStrategies": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "api-call-tracking": {
+      "type": "object",
+      "required": ["enabled", "groupBy", "implementation"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "const": true,
+          "description": "API call tracking must be enabled"
+        },
+        "groupBy": {
+          "type": "array",
+          "minItems": 1,
+          "contains": {
+            "const": "correlationId"
+          },
+          "items": {
+            "type": "string",
+            "enum": ["correlationId", "apiName", "userId", "tenantId"]
+          },
+          "description": "Fields to group API calls by"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10
+        },
+        "implementation": {
+          "type": "object",
+          "required": ["method", "correlationIdHeader"],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["logging", "metrics"],
+              "description": "Implementation method for tracking"
+            },
+            "correlationIdHeader": {
+              "type": "string",
+              "pattern": "^X-[A-Za-z-]+$",
+              "description": "HTTP header name for correlation ID (must start with X-)"
+            },
+            "propagateToUpstream": {
+              "type": "boolean",
+              "description": "Whether to propagate correlation ID to upstream services"
+            },
+            "logLevel": {
+              "type": "string",
+              "enum": ["DEBUG", "INFO", "WARN", "ERROR"]
+            },
+            "logFormat": {
+              "type": "object",
+              "required": ["template", "fields"],
+              "properties": {
+                "template": {
+                  "type": "string",
+                  "minLength": 20,
+                  "pattern": ".*correlation.*api.*",
+                  "description": "Log message template (must include correlation and api references)"
+                },
+                "fields": {
+                  "type": "array",
+                  "minItems": 3,
+                  "contains": {
+                    "const": "correlationId"
+                  },
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "aggregation": {
+              "type": "object",
+              "required": ["enabled", "aggregateBy"],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "aggregateBy": {
+                  "type": "string",
+                  "const": "correlationId"
+                },
+                "storage": {
+                  "type": "string",
+                  "enum": ["in-memory", "redis", "database"]
+                },
+                "query": {
+                  "type": "string",
+                  "minLength": 20,
+                  "pattern": ".*GROUP BY.*correlation.*",
+                  "description": "SQL-like query for aggregating API calls"
+                }
+              },
+              "if": {
+                "properties": {
+                  "enabled": { "const": true }
+                }
+              },
+              "then": {
+                "required": ["query", "storage"]
+              }
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "exportFormat": {
+                  "type": "string",
+                  "enum": ["prometheus", "openmetrics", "statsd"]
+                },
+                "counters": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "description", "labels"],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "pattern": "^[a-z_][a-z0-9_]*$"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 10
+                      },
+                      "labels": {
+                        "type": "array",
+                        "minItems": 1,
+                        "contains": {
+                          "const": "correlation_id"
+                        },
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z_][a-z0-9_]*$"
+                        }
+                      }
+                    }
+                  }
+                },
+                "endpoint": {
+                  "type": "string",
+                  "pattern": "^/[a-z-/]*$"
+                }
+              },
+              "if": {
+                "properties": {
+                  "enabled": { "const": true }
+                }
+              },
+              "then": {
+                "required": ["exportFormat", "counters", "endpoint"]
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "method": { "const": "logging" }
+            }
+          },
+          "then": {
+            "required": ["logFormat", "logLevel"]
+          }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "openapi": {
+      "type": "string"
+    },
+    "x-dependencies": {
+      "type": "object",
+      "description": "Specifies dependencies on other OpenAPI specs (client specs)",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["main-with-clients", "aggregator", "standalone"],
+          "description": "Type of dependency relationship"
+        },
+        "clientSpecs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "source"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Client spec name or identifier"
+              },
+              "source": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL or path to the client spec"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+\\.\\d+$",
+                "description": "Semantic version of the client spec"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "Whether this client spec is required"
+              },
+              "endpoints": {
+                "type": "array",
+                "description": "Specific endpoints used from this client",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type": "string"},
+                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "consolidationStrategy": {
+          "type": "string",
+          "enum": ["2-to-1-aggregation", "main-client-pattern", "none"],
+          "description": "How this spec consolidates client specs"
+        }
+      },
+      "required": ["type"],
+      "if": {
+        "properties": {
+          "type": {"enum": ["main-with-clients", "aggregator"]}
+        }
+      },
+      "then": {
+        "required": ["clientSpecs"],
+        "properties": {
+          "clientSpecs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "patternProperties": {
+        "^/": {
+          "type": "object",
+          "patternProperties": {
+            "^(get|post|put|patch|delete)$": {
+              "type": "object",
+              "properties": {
+                "x-co2-impact": {
+                  "$ref": "#/definitions/co2-impact"
+                },
+                "x-api-call-tracking": {
+                  "$ref": "#/definitions/api-call-tracking"
+                },
+                "x-consolidation": {
+                  "type": "object",
+                  "description": "If present, this is a consolidated endpoint"
+                }
+              },
+              "if": {
+                "required": ["x-consolidation"]
+              },
+              "then": {
+                "required": ["x-co2-impact", "x-api-call-tracking"],
+                "errorMessage": "Consolidated endpoints must have both x-co2-impact and x-api-call-tracking extensions"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

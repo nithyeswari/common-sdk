@@ -1,0 +1,317 @@
+openapi: 3.0.0
+info:
+  title: Aggregator API with 2-to-1 Consolidation
+  version: 1.0.0
+  description: Example of an aggregator spec that consolidates multiple client endpoints into one
+
+# Spec Dependencies Extension
+x-dependencies:
+  type: aggregator
+  consolidationStrategy: 2-to-1-aggregation
+  clientSpecs:
+    - name: PaymentServiceClient
+      source: ./specs/payment-service.yaml
+      version: 1.2.0
+      required: true
+      endpoints:
+        - path: /payments/validate
+          method: POST
+        - path: /payments/process
+          method: POST
+
+    - name: InventoryServiceClient
+      source: ./specs/inventory-service.yaml
+      version: 2.0.1
+      required: true
+      endpoints:
+        - path: /inventory/check
+          method: POST
+        - path: /inventory/reserve
+          method: POST
+
+paths:
+  /api/checkout:
+    post:
+      summary: Consolidated checkout (validates payment + checks inventory in one call)
+      description: |
+        This endpoint consolidates two separate API calls into one:
+        1. POST /payments/validate (PaymentServiceClient)
+        2. POST /inventory/check (InventoryServiceClient)
+
+        Both calls are made in parallel and results are merged.
+
+      # Consolidation metadata
+      x-consolidation:
+        type: 2-to-1
+        sources:
+          - client: PaymentServiceClient
+            endpoint: POST /payments/validate
+            description: Validates payment method and available funds
+          - client: InventoryServiceClient
+            endpoint: POST /inventory/check
+            description: Checks product availability
+        rules:
+          execution: parallel
+          failureStrategy: fail-fast
+          timeout: 5000
+          headerPropagation:
+            - X-Correlation-ID
+            - X-User-ID
+            - Authorization
+
+      # API Call Tracking (REQUIRED for consolidated endpoints)
+      x-api-call-tracking:
+        enabled: true
+        groupBy: [correlationId, apiName]
+        description: Track consolidated checkout calls and upstream API calls
+        implementation:
+          method: logging
+          correlationIdHeader: X-Correlation-ID
+          propagateToUpstream: true
+          logLevel: INFO
+          logFormat:
+            template: "API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration} | consolidation=true | upstream_calls={upstreamCallCount}"
+            fields: [correlationId, apiName, method, path, status, duration, timestamp, consolidationType, upstreamCallCount]
+          aggregation:
+            enabled: true
+            aggregateBy: correlationId
+            storage: in-memory
+            query: |
+              SELECT
+                correlation_id,
+                api_name,
+                COUNT(*) as call_count,
+                SUM(upstream_calls) as total_upstream_calls
+              FROM api_logs
+              WHERE consolidation = true
+              GROUP BY correlation_id, api_name
+          metrics:
+            enabled: true
+            exportFormat: prometheus
+            counters:
+              - name: consolidated_api_calls_total
+                description: Total consolidated API calls
+                labels: [correlation_id, api_name, method, path, status]
+              - name: upstream_api_calls_total
+                description: Upstream API calls from consolidated endpoints
+                labels: [correlation_id, api_name, upstream_client]
+              - name: consolidation_efficiency
+                description: Ratio of 1 consolidated call to N upstream calls
+                labels: [correlation_id, api_name]
+            endpoint: /metrics
+
+      # CO2 Emission Tracking (REQUIRED for consolidated endpoints)
+      x-co2-impact:
+        enabled: true
+        estimatedGramsPerRequest: 45
+        calculationMethod: cloud-carbon-coefficients
+        breakdown:
+          network: 15
+          compute: 20
+          storage: 5
+          dataTransfer: 5
+        upstreamEmissions:
+          - client: PaymentServiceClient
+            endpoint: POST /payments/validate
+            estimatedGrams: 20
+          - client: InventoryServiceClient
+            endpoint: POST /inventory/check
+            estimatedGrams: 18
+        consolidationBenefit:
+          withoutAggregator: 50
+          withAggregator: 45
+          savingsGrams: 5
+          savingsPercent: 10
+        mitigationStrategies:
+          - caching
+          - parallel-execution
+          - compression
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, items, paymentMethod]
+              properties:
+                userId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId:
+                        type: string
+                      quantity:
+                        type: integer
+                paymentMethod:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    token:
+                      type: string
+
+      responses:
+        '200':
+          description: Checkout validated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  paymentValid:
+                    type: boolean
+                  inventoryAvailable:
+                    type: boolean
+                  consolidatedResult:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                      upstreamCalls:
+                        type: integer
+                        description: Number of upstream API calls made
+                      duration:
+                        type: integer
+                        description: Total duration in milliseconds
+
+  /api/complete-order:
+    post:
+      summary: Complete order (processes payment + reserves inventory)
+      description: |
+        This endpoint consolidates:
+        1. POST /payments/process (PaymentServiceClient)
+        2. POST /inventory/reserve (InventoryServiceClient)
+
+        Calls are made sequentially (payment first, then inventory).
+
+      # Consolidation metadata
+      x-consolidation:
+        type: 2-to-1
+        sources:
+          - client: PaymentServiceClient
+            endpoint: POST /payments/process
+            description: Process the payment
+          - client: InventoryServiceClient
+            endpoint: POST /inventory/reserve
+            description: Reserve inventory items
+        rules:
+          execution: sequential
+          failureStrategy: rollback
+          timeout: 10000
+          rollbackStrategy:
+            - step: 1
+              action: refund-payment
+          headerPropagation:
+            - X-Correlation-ID
+            - X-User-ID
+            - Authorization
+
+      # API Call Tracking
+      x-api-call-tracking:
+        enabled: true
+        groupBy: [correlationId, apiName]
+        description: Track complete order workflow with sequential upstream calls
+        implementation:
+          method: logging
+          correlationIdHeader: X-Correlation-ID
+          propagateToUpstream: true
+          logLevel: INFO
+          logFormat:
+            template: "API_CALL | correlation_id={correlationId} | api_name={apiName} | method={method} | path={path} | status={status} | duration_ms={duration} | execution=sequential | step={step}"
+            fields: [correlationId, apiName, method, path, status, duration, timestamp, executionType, step]
+          aggregation:
+            enabled: true
+            aggregateBy: correlationId
+            storage: in-memory
+            query: |
+              SELECT
+                correlation_id,
+                api_name,
+                COUNT(*) as total_calls,
+                AVG(duration) as avg_duration,
+                MAX(step) as max_step
+              FROM api_logs
+              WHERE execution = 'sequential'
+              GROUP BY correlation_id, api_name
+          metrics:
+            enabled: true
+            exportFormat: prometheus
+            counters:
+              - name: sequential_api_calls_total
+                description: Sequential API calls in workflow
+                labels: [correlation_id, api_name, step]
+              - name: rollback_executions_total
+                description: Number of rollbacks executed
+                labels: [correlation_id, api_name, reason]
+            endpoint: /metrics
+
+      # CO2 Emission Tracking
+      x-co2-impact:
+        enabled: true
+        estimatedGramsPerRequest: 55
+        calculationMethod: cloud-carbon-coefficients
+        breakdown:
+          network: 20
+          compute: 25
+          storage: 5
+          dataTransfer: 5
+        upstreamEmissions:
+          - client: PaymentServiceClient
+            endpoint: POST /payments/process
+            estimatedGrams: 28
+          - client: InventoryServiceClient
+            endpoint: POST /inventory/reserve
+            estimatedGrams: 22
+        consolidationBenefit:
+          withoutAggregator: 65
+          withAggregator: 55
+          savingsGrams: 10
+          savingsPercent: 15
+          explanation: Reduced network overhead and connection reuse
+        mitigationStrategies:
+          - connection-pooling
+          - async-execution
+          - efficient-queries
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, userId]
+              properties:
+                orderId:
+                  type: string
+                userId:
+                  type: string
+
+      responses:
+        '201':
+          description: Order completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  paymentProcessed:
+                    type: boolean
+                  inventoryReserved:
+                    type: boolean
+                  transactionId:
+                    type: string
+                  consolidatedResult:
+                    type: object
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+security:
+  - BearerAuth: []
