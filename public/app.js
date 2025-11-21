@@ -74,6 +74,23 @@ function updateJavaOptionsVisibility() {
     }
 }
 
+// Update Java options visibility for preview step
+function updateJavaOptionsPreviewVisibility() {
+    const selectedSDK = document.querySelector('input[name="sdkTypePreview"]:checked')?.value;
+    const javaSDKs = ['spring-boot', 'quarkus', 'quarkus-fullstack', 'spring-boot-client', 'quarkus-client'];
+    const javaOptionsPreview = document.getElementById('javaOptionsPreview');
+
+    if (!javaOptionsPreview) {
+        return;
+    }
+
+    if (javaSDKs.includes(selectedSDK)) {
+        javaOptionsPreview.classList.remove('hidden');
+    } else {
+        javaOptionsPreview.classList.add('hidden');
+    }
+}
+
 // Add event listeners to SDK type radio buttons (with delay to ensure DOM is ready)
 function initSDKRadioListeners() {
     const sdkTypeRadios = document.querySelectorAll('input[name="sdkType"]');
@@ -82,6 +99,13 @@ function initSDKRadioListeners() {
     });
     // Set initial visibility
     updateJavaOptionsVisibility();
+
+    // Also init preview step listeners
+    const sdkTypePreviewRadios = document.querySelectorAll('input[name="sdkTypePreview"]');
+    sdkTypePreviewRadios.forEach(radio => {
+        radio.addEventListener('change', updateJavaOptionsPreviewVisibility);
+    });
+    updateJavaOptionsPreviewVisibility();
 }
 
 // Initialize on load and also try immediately
@@ -1810,7 +1834,7 @@ function populateClientServicesList() {
         serviceCard.className = 'client-service-card';
 
         const endpointCount = api.operations?.length || 0;
-        const schemaCount = api.schemas?.length || 0;
+        const schemaCount = Array.isArray(api.schemas) ? api.schemas.length : (api.schemas ? Object.keys(api.schemas).length : 0);
 
         serviceCard.innerHTML = `
             <div class="service-card-header">
@@ -1855,7 +1879,7 @@ function updateMainServicePreview() {
         const apiIndex = parseInt(checkbox.dataset.apiIndex);
         const api = parsedAPIs[apiIndex];
         totalEndpoints += api.operations?.length || 0;
-        totalSchemas += api.schemas?.length || 0;
+        totalSchemas += Array.isArray(api.schemas) ? api.schemas.length : (api.schemas ? Object.keys(api.schemas).length : 0);
     });
 
     previewContainer.innerHTML = `
@@ -1961,9 +1985,14 @@ function buildMainServiceSpec(serviceName, version, basePath, selectedServices, 
 
         // Add schemas
         if (api.schemas) {
-            api.schemas.forEach(schema => {
-                const schemaName = `${api.title || 'Service' + serviceIndex}_${schema.name || 'Schema'}`;
-                spec.components.schemas[schemaName] = schema;
+            // Handle both array and object formats for schemas
+            const schemasArray = Array.isArray(api.schemas)
+                ? api.schemas
+                : Object.entries(api.schemas).map(([name, schema]) => ({ name, schema }));
+
+            schemasArray.forEach(schemaItem => {
+                const schemaName = `${api.title || 'Service' + serviceIndex}_${schemaItem.name || 'Schema'}`;
+                spec.components.schemas[schemaName] = schemaItem.schema || schemaItem;
             });
         }
 
@@ -2151,6 +2180,10 @@ function proceedToSpecManager() {
         // Show aggregator config step
         document.getElementById('aggregatorConfigStep').classList.remove('hidden');
 
+        // Hide main generate button in aggregation mode (SDK options are in aggregatorPreviewStep)
+        const generateBtn = document.getElementById('generateBtn');
+        if (generateBtn) generateBtn.classList.add('hidden');
+
         // Populate aggregator API list
         updateAggregatorApiList();
         populateAggregatorHeaderConfig();
@@ -2161,6 +2194,10 @@ function proceedToSpecManager() {
     } else if (strategy === 'main-plus-clients') {
         // Show main+clients config step
         document.getElementById('mainClientConfigStep').classList.remove('hidden');
+
+        // Show main generate button in main+clients mode
+        const generateBtn = document.getElementById('generateBtn');
+        if (generateBtn) generateBtn.classList.remove('hidden');
 
         // Populate API list
         updateAPIList();
@@ -2445,15 +2482,17 @@ async function proceedToPreview() {
 
         if (configStep) {
             configStep.classList.add('hidden');
-            configStep.style.display = 'none';
+           // configStep.style.display = 'none';
         }
+        // Hide previewStep (which doesn't have SDK type options) in aggregation mode
         if (previewStep2) {
-            previewStep2.className = previewStep2.className.replace(/\bhidden\b/g, '').trim();
-            console.log('Preview step classes after:', previewStep2.className);
+            previewStep2.classList.remove('hidden');
+            console.log('previewStep hidden in aggregation mode');
         }
         if (previewStep) {
-            previewStep.className = previewStep.className.replace(/\bhidden\b/g, '').trim();
-            console.log('Preview step classes after:', previewStep.className);
+            previewStep.classList.remove('hidden');
+          //  previewStep.style.display = 'block';
+            console.log('aggregatorPreviewStep made visible, classes:', previewStep.className);
         } else {
             console.error('aggregatorPreviewStep element not found!');
             return;
@@ -2980,8 +3019,11 @@ async function proceedToGeneration() {
         // Download the spec first
         downloadAggregatedSpecNow();
 
-        // Get the selected SDK type
-        const selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
+        // Get the selected SDK type - check both sdkType and sdkTypePreview
+        let selectedSDK = document.querySelector('input[name="sdkType"]:checked')?.value;
+        if (!selectedSDK) {
+            selectedSDK = document.querySelector('input[name="sdkTypePreview"]:checked')?.value;
+        }
 
         if (!selectedSDK) {
             alert('Please select an SDK type to generate');
@@ -2999,23 +3041,67 @@ async function proceedToGeneration() {
         // Get form values
         const moduleName = moduleNameInput.value || 'api';
         const baseURL = baseURLInput.value || '';
-        const groupId = document.getElementById('groupId')?.value || '';
-        const artifactId = document.getElementById('artifactId')?.value || '';
+        const groupId = document.getElementById('groupId')?.value || document.getElementById('groupIdPreview')?.value || '';
+        const artifactId = document.getElementById('artifactId')?.value || document.getElementById('artifactIdPreview')?.value || '';
 
         // Create generator instance
         const generator = new window.SDKGenerator();
 
-        // Generate SDK
+        // Parse the aggregated spec into the expected format
+        progressBar.style.width = '20%';
+        progressText.textContent = 'Parsing consolidated spec...';
+        const parsedAPI = await generator.parseOpenAPISpec(specYAML, 'aggregated-spec.yaml', baseURL);
+
+        // Generate SDK based on selected type
         progressBar.style.width = '30%';
         progressText.textContent = `Generating ${selectedSDK} SDK...`;
 
-        const result = await generator.generateSDK({
-            spec: specYAML,
-            moduleName,
-            baseURL,
-            sdkTypes: [selectedSDK],
-            groupId,
-            artifactId
+        let files;
+        const javaPackage = document.getElementById('packageName')?.value || document.getElementById('packageNamePreview')?.value || 'com.example.api';
+        const javaVersion = document.getElementById('javaVersion')?.value || document.getElementById('javaVersionPreview')?.value || '21';
+
+        const javaOptions = {
+            packageName: javaPackage,
+            groupId: groupId || 'com.example',
+            artifactId: artifactId || moduleName,
+            javaVersion: javaVersion
+        };
+
+        switch (selectedSDK) {
+            case 'react':
+                files = await generator.generateSDK(parsedAPI, moduleName);
+                break;
+            case 'quarkus-fullstack':
+                files = await generator.generateQuarkus(parsedAPI, javaOptions);
+                break;
+            case 'spring-boot-client':
+                files = await generator.generateSpringBoot(parsedAPI, javaOptions);
+                break;
+            case 'quarkus-client':
+                files = await generator.generateQuarkusClient(parsedAPI, javaOptions);
+                break;
+            default:
+                files = await generator.generateSDK(parsedAPI, moduleName);
+        }
+
+        // Create ZIP file
+        progressBar.style.width = '60%';
+        progressText.textContent = 'Creating ZIP archive...';
+
+        const zip = new JSZip();
+        const sdkFolder = zip.folder(`${moduleName}-${selectedSDK}`);
+
+        // Add all generated files to the zip
+        for (const [filename, content] of Object.entries(files)) {
+            sdkFolder.file(filename, content);
+        }
+
+        // Generate ZIP blob
+        progressBar.style.width = '85%';
+        const zipBlob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
         });
 
         progressBar.style.width = '100%';
@@ -3023,18 +3109,23 @@ async function proceedToGeneration() {
 
         // Download the generated SDK
         setTimeout(() => {
+            const url = URL.createObjectURL(zipBlob);
             const link = document.createElement('a');
-            link.href = result.zipUrl;
-            link.download = `${moduleName}-sdk.zip`;
+            link.href = url;
+            link.download = `${moduleName}-${selectedSDK}-sdk.zip`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
 
             // Hide progress and show success
             setTimeout(() => {
                 progressContainer.classList.add('hidden');
                 successContainer.classList.remove('hidden');
-                document.getElementById('aggregatorPreviewStep').classList.add('hidden');
+                const previewStep = document.getElementById('aggregatorPreviewStep');
+                if (previewStep) previewStep.classList.add('hidden');
+                const previewStep2 = document.getElementById('previewStep');
+                if (previewStep2) previewStep2.classList.add('hidden');
             }, 1000);
         }, 500);
 
