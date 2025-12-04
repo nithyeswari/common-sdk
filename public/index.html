@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenAPI Redux SDK Generator</title>
+    <title>OpenAPI SDK Generator</title>
     <link rel="stylesheet" href="styles.css">
     <!-- External libraries -->
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
@@ -20,18 +20,17 @@
             </div>
             <h1>SDK Generator</h1>
             <p class="subtitle">Generate SDKs from your OpenAPI specifications</p>
-            <div class="version-card">
-                <span class="version-label">Version</span>
-                <span class="version-number">2.0.0</span>
-                <span class="version-status">Deployed</span>
-                <span class="version-timestamp" id="versionTimestamp"></span>
-            </div>
         </header>
 
+        <!-- Main Card -->
+        <div class="card" id="mainCard">
+            <!-- Step 1: Upload OpenAPI File(s) -->
+            <div class="step-section" id="step1">
+                <div class="step-header">
+                    <span class="step-number">1</span>
+                    <h2>Upload OpenAPI Specification(s)</h2>
+                </div>
 
-        <!-- Upload Mode Card -->
-        <div class="card" id="uploadModeCard">
-            <form id="uploadForm" class="upload-form">
                 <div class="form-group">
                     <label for="openApiFile" class="file-label">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -39,721 +38,247 @@
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <span id="fileName">Choose OpenAPI file(s) - First file is main spec</span>
-                        <input type="file" id="openApiFile" name="openApiFile" accept=".yaml,.yml,.json" required multiple>
+                        <span id="fileName">Choose OpenAPI file(s) (.yaml, .yml, .json)</span>
+                        <input type="file" id="openApiFile" accept=".yaml,.yml,.json" required multiple>
                     </label>
-                    <small style="color: #6b7280; margin-top: -8px;">
-                        💡 Tip: Upload multiple files if your spec uses $ref to reference external files. The first file will be treated as the main specification.
+                    <small style="color: #6B7280; margin-top: 8px; display: block;">
+                        Upload 2+ files to enable spec consolidation (2-to-1 endpoint merging)
                     </small>
+                </div>
+
+                <!-- Uploaded Files List -->
+                <div id="uploadedFilesList" class="uploaded-files-list hidden">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Consolidation Options (shown when 2+ files) -->
+                <div id="consolidationOptions" class="consolidation-options hidden">
+                    <h3>🔄 Spec Consolidation</h3>
+                    <p>Configure how multiple specs should be combined</p>
+
+                    <!-- Step 1: Consolidation Type -->
+                    <div class="consolidation-section">
+                        <label class="section-label">1. Consolidation Type</label>
+                        <div class="consolidation-type-list">
+                            <label class="consolidation-type-card" data-type="main-client">
+                                <input type="radio" name="consolidationType" value="main-client" checked>
+                                <div class="type-content">
+                                    <span class="type-icon">🏗️</span>
+                                    <div class="type-info">
+                                        <strong>Main + Clients</strong>
+                                        <small>One main service, others become client SDKs for inter-service calls</small>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="consolidation-type-card" data-type="source-target">
+                                <input type="radio" name="consolidationType" value="source-target">
+                                <div class="type-content">
+                                    <span class="type-icon">➡️</span>
+                                    <div class="type-info">
+                                        <strong>Source → Target</strong>
+                                        <small>Map endpoints from source spec to call target spec (1-to-1)</small>
+                                    </div>
+                                </div>
+                            </label>
+                            <label class="consolidation-type-card" data-type="aggregation">
+                                <input type="radio" name="consolidationType" value="aggregation">
+                                <div class="type-content">
+                                    <span class="type-icon">🔀</span>
+                                    <div class="type-info">
+                                        <strong>Aggregation</strong>
+                                        <small>Combine multiple endpoints into one consolidated endpoint (many-to-1)</small>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: API Selection (for Main+Client) -->
+                    <div id="mainClientConfig" class="consolidation-section">
+                        <label class="section-label">2. Select Main API</label>
+                        <p class="section-desc">First selected becomes main, others become clients</p>
+                        <div id="mainApiSelector" class="main-api-selector">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Source-Target Mapping (for Source→Target) -->
+                    <div id="sourceTargetConfig" class="consolidation-section hidden">
+                        <label class="section-label">2. Source → Target Mapping</label>
+                        <p class="section-desc">Define which source endpoint calls which target endpoint (1-to-1)</p>
+                        <div id="sourceTargetMappingList" class="endpoint-mapping-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <button type="button" id="addSourceTargetMappingBtn" class="btn-secondary btn-small">
+                            + Add Source → Target Mapping
+                        </button>
+                    </div>
+
+                    <!-- Step 2: Aggregation Mapping (for Aggregation) -->
+                    <div id="aggregationConfig" class="consolidation-section hidden">
+                        <label class="section-label">2. Aggregation Mapping</label>
+                        <p class="section-desc">Combine multiple source endpoints into one consolidated endpoint (many-to-1)</p>
+                        <div id="aggregationMappingList" class="endpoint-mapping-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <button type="button" id="addAggregationMappingBtn" class="btn-secondary btn-small">
+                            + Add Aggregation
+                        </button>
+                    </div>
+
+                    <!-- Step 3: Header Configuration -->
+                    <div class="consolidation-section">
+                        <label class="section-label">3. Header Propagation</label>
+                        <p class="section-desc">Configure which headers to propagate between services</p>
+                        <div id="headerConfigList" class="header-config-list">
+                            <!-- Populated dynamically with headers from specs -->
+                        </div>
+                        <button type="button" id="addHeaderBtn" class="btn-secondary btn-small">
+                            + Add Custom Header
+                        </button>
+                    </div>
+
+                    <!-- Step 4: Output Configuration -->
+                    <div class="consolidation-section">
+                        <label class="section-label">4. Output Configuration</label>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="consolidatedSpecName">Consolidated Name</label>
+                                <input type="text" id="consolidatedSpecName" value="unified-api" placeholder="unified-api">
+                            </div>
+                            <div class="form-group">
+                                <label for="configFormat">Config Format</label>
+                                <select id="configFormat">
+                                    <option value="auto">Auto (based on SDK)</option>
+                                    <option value="properties">application.properties</option>
+                                    <option value="yaml">application.yaml</option>
+                                    <option value="json">config.json</option>
+                                </select>
+                            </div>
+                        </div>
+                        <label class="checkbox-option">
+                            <input type="checkbox" id="downloadConsolidatedSpec">
+                            <span>
+                                <strong>Download Consolidated Spec</strong>
+                                <small>Include merged OpenAPI YAML in output</small>
+                            </span>
+                        </label>
+                    </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
                         <label for="moduleName">Module Name</label>
-                        <input type="text" id="moduleName" name="moduleName" placeholder="api" value="api">
-                        <small>Name for your SDK module (e.g., "petstore", "myapi")</small>
+                        <input type="text" id="moduleName" placeholder="api" value="api">
+                        <small>Name for your SDK module</small>
                     </div>
-
                     <div class="form-group">
                         <label for="baseURL">Base URL (Optional)</label>
-                        <input type="text" id="baseURL" name="baseURL" placeholder="https://api.example.com">
-                        <small>Override the base URL from the spec</small>
+                        <input type="text" id="baseURL" placeholder="https://api.example.com">
+                        <small>Override the base URL from spec</small>
                     </div>
                 </div>
+            </div>
 
-
-                <!-- Multi-Spec Configuration (hidden by default) -->
-                <div id="multiSpecConfig" class="multi-spec-config hidden">
-                    <!-- Step 1: Choose Aggregation Strategy -->
-                    <div id="aggregationStrategyStep" class="workflow-step">
-                        <div class="spec-manager-header">
-                            <div>
-                                <h3>🎯 Step 1: Choose Aggregation Strategy</h3>
-                                <p class="spec-manager-description">
-                                    Select how you want to combine your specifications
-                                </p>
-                            </div>
-                            <button type="button" onclick="clearAllSpecs()" class="btn-clear-specs">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
-                                Clear All
-                            </button>
-                        </div>
-
-                        <div class="strategy-selection">
-                            <label class="strategy-card">
-                                <input type="radio" name="aggregationStrategy" value="aggregator" checked>
-                                <div class="strategy-content">
-                                    <div class="strategy-icon">🔄</div>
-                                    <h4>Spec Aggregator (2-to-1)</h4>
-                                    <p>Create a new unified specification by combining endpoints from multiple specs. Each new endpoint calls 2 original endpoints and merges responses.</p>
-                                    <div class="strategy-features">
-                                        <span>✓ 2-to-1 consolidation</span>
-                                        <span>✓ Response merging</span>
-                                        <span>✓ Header propagation</span>
-                                        <span>✓ Business logic</span>
-                                    </div>
-                                    <div style="margin-top: 12px; padding: 10px; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.85rem;">
-                                        <strong>What it does:</strong> Combines 2 different endpoints (e.g., <code>GET /users/{id}</code> + <code>GET /profile/{id}</code>) into 1 new endpoint that orchestrates both calls and merges results.
-                                    </div>
-                                </div>
-                            </label>
-
-                            <label class="strategy-card">
-                                <input type="radio" name="aggregationStrategy" value="main-plus-clients">
-                                <div class="strategy-content">
-                                    <div class="strategy-icon">🏗️</div>
-                                    <h4>Main Service + Clients</h4>
-                                    <p>Generate a Quarkus main service with REST clients for calling other services. No spec aggregation - just header propagation and orchestration code.</p>
-                                    <div class="strategy-features">
-                                        <span>✓ Main service backend</span>
-                                        <span>✓ Client SDK generation</span>
-                                        <span>✓ Header propagation</span>
-                                        <span>✓ Simple orchestration</span>
-                                    </div>
-                                    <div style="margin-top: 12px; padding: 10px; background: #DBEAFE; border-left: 3px solid #3B82F6; border-radius: 4px; font-size: 0.85rem;">
-                                        <strong>What it does:</strong> Generates code for main service + client SDKs. No new spec is created - uses existing specs as-is.
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
-
-                        <button type="button" onclick="proceedToSpecManager()" class="btn-primary btn-proceed">
-                            Continue to Spec Manager
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- Step 2a: Aggregator Configuration -->
-                    <div id="aggregatorConfigStep" class="workflow-step hidden">
-                        <div class="spec-manager-header">
-                            <div>
-                                <h3>🔄 Step 2: Create Aggregated Spec</h3>
-                                <p class="spec-manager-description">
-                                    Select endpoints to combine and configure how they should be merged
-                                </p>
-                            </div>
-                            <button type="button" onclick="backToStrategy()" class="btn-back">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                Back
-                            </button>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📚 Uploaded Specifications</label>
-                            <div id="aggregatorApiList" class="api-list-enhanced">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">⚡ Create Consolidated Endpoints (2-to-1)</label>
-                            <p class="section-description">
-                                Combine 2 different endpoints into 1 new endpoint that calls both and merges responses
-                            </p>
-                            <div id="consolidationsList" class="consolidations-list">
-                                <!-- Shows created consolidations -->
-                            </div>
-                            <button type="button" onclick="showConsolidationBuilder()" class="btn-scan">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path d="M12 5v14M5 12h14"></path>
-                                </svg>
-                                Create New Consolidated Endpoint
-                            </button>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">🔗 Header Propagation</label>
-                            <p class="section-description">
-                                Configure which headers should be propagated from incoming requests to client API calls
-                            </p>
-                            <div id="aggregatorHeaderConfig" class="header-config">
-                                <!-- Populated dynamically -->
-                            </div>
-                            <button type="button" onclick="addAggregatorCustomHeader()" class="btn-add-header">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                Add Custom Header
-                            </button>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">⚙️ Business Logic & Transformations</label>
-                            <div class="business-logic-config">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="aggregatorEnableValidation" checked>
-                                    <div>
-                                        <strong>Request/Response Validation</strong>
-                                        <small>Validate against OpenAPI schema</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="aggregatorEnableTransformation" checked>
-                                    <div>
-                                        <strong>Data Transformation</strong>
-                                        <small>Transform data between services</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="aggregatorEnableEnrichment">
-                                    <div>
-                                        <strong>Response Enrichment</strong>
-                                        <small>Enrich responses with additional data</small>
-                                    </div>
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="aggregatorEnableCaching">
-                                    <div>
-                                        <strong>Response Caching</strong>
-                                        <small>Cache responses from client services</small>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📊 API Call Tracking & Metrics</label>
-                            <p class="section-description">
-                                Monitor and track API calls in workflow executions
-                            </p>
-                            <div class="business-logic-config">
-                                <label class="checkbox-label" style="border: 2px solid #10B981; background: #ECFDF5; padding: 12px; border-radius: 8px;">
-                                    <input type="checkbox" id="enableApiCallTracking" checked>
-                                    <div>
-                                        <strong>Enable API Call Tracking</strong>
-                                        <small>Track API calls grouped by Correlation ID and API Name</small>
-                                    </div>
-                                </label>
-                                <div id="apiTrackingOptions" class="tracking-options" style="margin-top: 12px; padding-left: 24px;">
-                                    <div style="margin-bottom: 8px; color: #059669; font-size: 0.9rem;">
-                                        <strong>📝 Logging-based Implementation:</strong>
-                                    </div>
-                                    <div style="margin-top: 12px; padding: 10px; background: #F3F4F6; border-radius: 6px; font-size: 0.85rem;">
-                                        <strong>Log Format:</strong><br>
-                                        <code style="display: block; margin-top: 4px; word-break: break-all;">API_CALL | correlation_id={id} | api_name={name} | method={method} | path={path} | status={code} | duration_ms={ms}</code>
-                                    </div>
-                                    <div style="margin-top: 12px; padding: 10px; background: #EEF2FF; border-radius: 6px; font-size: 0.85rem;">
-                                        <strong>Aggregation Query:</strong><br>
-                                        <code style="display: block; margin-top: 4px;">SELECT correlation_id, api_name, COUNT(*) as call_count<br>FROM api_logs<br>GROUP BY correlation_id, api_name</code>
-                                    </div>
-                                    <ul style="margin: 12px 0 0 0; padding-left: 20px; color: #6B7280; font-size: 0.85rem;">
-                                        <li><strong>Header:</strong> <code>X-Correlation-ID</code> propagated to upstream APIs</li>
-                                        <li><strong>Metrics:</strong> Exported to Prometheus at <code>/metrics</code></li>
-                                        <li><strong>Storage:</strong> In-memory aggregation for fast queries</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
-                            Preview Consolidated Spec
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- Step 2b: Main+Clients Configuration -->
-                    <div id="mainClientConfigStep" class="workflow-step hidden">
-                        <div class="spec-manager-header">
-                            <div>
-                                <h3>🏗️ Step 2: Configure Main Service + Clients</h3>
-                                <p class="spec-manager-description">
-                                    Select main service and configure header propagation (no spec aggregation)
-                                </p>
-                            </div>
-                            <button type="button" onclick="backToStrategy()" class="btn-back">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                Back
-                            </button>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📚 Uploaded API Specifications</label>
-                            <p class="section-description">
-                                Click on an API to select it as the main service. Others will be clients.
-                            </p>
-                            <div id="apiList" class="api-list-enhanced">
-                                <!-- Populated dynamically -->
-                            </div>
-                            <div class="helper-text">
-                                💡 ⭐ = Main Service • 🔗 = Client Service
-                            </div>
-                        </div>
-
-                    <div class="form-group">
-                        <label class="section-label">
-                            🔗 Header Propagation Configuration
-                        </label>
-                        <p class="section-description">
-                            Configure which headers should be automatically propagated from incoming requests to client API calls.
-                        </p>
-                        <div id="headerConfig" class="header-config">
-                            <!-- Populated dynamically -->
-                        </div>
-                        <button type="button" id="addCustomHeader" class="btn-add-header">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            Add Custom Header
-                        </button>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="section-label">
-                            ⚙️ Business Logic & Transformations
-                        </label>
-                        <p class="section-description">
-                            Configure additional features for your generated service
-                        </p>
-                        <div id="businessLogicConfig" class="business-logic-config">
-                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
-                                <input type="checkbox" id="enableValidation" checked style="margin-right: 12px; margin-top: 3px;">
-                                <div>
-                                    <strong>Request/Response Validation</strong>
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                        Validate incoming requests and outgoing responses against OpenAPI schema
-                                    </small>
-                                </div>
-                            </label>
-                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
-                                <input type="checkbox" id="enableTransformation" checked style="margin-right: 12px; margin-top: 3px;">
-                                <div>
-                                    <strong>Data Transformation Placeholders</strong>
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                        Add placeholder methods for transforming data between internal and external formats
-                                    </small>
-                                </div>
-                            </label>
-                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
-                                <input type="checkbox" id="enableEnrichment" style="margin-right: 12px; margin-top: 3px;">
-                                <div>
-                                    <strong>Data Enrichment</strong>
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                        Add methods to enrich responses with data from external client services
-                                    </small>
-                                </div>
-                            </label>
-                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
-                                <input type="checkbox" id="enableCaching" style="margin-right: 12px; margin-top: 3px;">
-                                <div>
-                                    <strong>Caching Layer</strong>
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                        Add Redis caching for external API calls to improve performance
-                                    </small>
-                                </div>
-                            </label>
-                        </div>
-
-                        <button type="button" onclick="proceedToGenerate()" class="btn-primary btn-proceed">
-                            Proceed to Generate SDKs
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- Step 3: Preview Consolidated Spec (only for Aggregator strategy) -->
-                    <div id="aggregatorPreviewStep" class="workflow-step hidden">
-                        <div class="spec-manager-header">
-                            <div>
-                                <h3>👁️ Step 3: Preview Consolidated Spec</h3>
-                                <p class="spec-manager-description">
-                                    Review the consolidated specification and generate SDKs
-                                </p>
-                            </div>
-                            <button type="button" onclick="backToAggregatorConfig()" class="btn-back">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                Back
-                            </button>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="section-label">📋 Consolidated Endpoints</label>
-                            <p class="section-description">
-                                These are the 2-to-1 consolidated endpoints that will be in your new spec
-                            </p>
-                            <div id="consolidationsSummary" class="consolidations-summary">
-                                <!-- Populated dynamically -->
-                            </div>
-                        </div>
-
-                        <div class="preview-container">
-                            <div class="preview-summary">
-                                <h4>Aggregated Spec Summary</h4>
-                                <div id="previewSummaryAggregator" class="summary-stats">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <div class="preview-content">
-                                <div class="preview-tabs">
-                                    <button class="preview-tab active" onclick="switchAggregatorPreviewTab('summary')">Summary</button>
-                                    <button class="preview-tab" onclick="switchAggregatorPreviewTab('yaml')">Spec (YAML)</button>
-                                    <button class="preview-tab" onclick="switchAggregatorPreviewTab('code')">Generated Code</button>
-                                </div>
-
-                                <div id="previewTabContentAggregator" class="preview-tab-content">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
-
-                            <!-- SDK Type Selection (moved from upload form) -->
-                            <div class="form-group" style="margin-top: 24px;">
-                                <label class="section-label">🛠️ SDK Type to Generate <span style="color: #6B7280; font-weight: normal; font-size: 0.9rem;">(Select one)</span></label>
-                                <p class="section-description">
-                                    Choose which SDK you want to generate from the consolidated spec
-                                </p>
-                                <div class="sdk-types">
-                                    <label class="sdk-type-option">
-                                        <input type="radio" name="sdkType" value="react" checked>
-                                        <span class="sdk-type-label">
-                                            <strong>React + Redux SDK</strong>
-                                            <small>TypeScript client with RTK Query & Redux Toolkit</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
-                                        <input type="radio" name="sdkType" value="quarkus-fullstack">
-                                        <span class="sdk-type-label">
-                                            <strong>Quarkus Full Stack ⚡</strong>
-                                            <small>Backend + Client SDK with automatic header propagation for inter-service calls</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                                        <input type="radio" name="sdkType" value="spring-boot-client">
-                                        <span class="sdk-type-label">
-                                            <strong>Spring Boot Client 🔗</strong>
-                                            <small>Java client library to call this API from another Spring Boot service</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                                        <input type="radio" name="sdkType" value="quarkus-client">
-                                        <span class="sdk-type-label">
-                                            <strong>Quarkus Client 🔗</strong>
-                                            <small>Java client library to call this API from another Quarkus service</small>
-                                        </span>
-                                    </label>
-                                </div>
-                                <small style="color: #4F46E5; margin-top: 8px; display: block;">
-                                    💡 <strong>Note:</strong> Select ONE SDK type to generate. Client SDKs generate REST client code for microservice-to-microservice communication
-                                </small>
-                            </div>
-
-                            <div id="javaOptions" class="java-options hidden" style="margin-top: 16px;">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="packageName">Java Package Name</label>
-                                        <input type="text" id="packageName" name="packageName" placeholder="com.example.api">
-                                        <small>Base package for generated Java code</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="groupId">Maven Group ID</label>
-                                        <input type="text" id="groupId" name="groupId" placeholder="com.example">
-                                        <small>Maven project group ID</small>
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="artifactId">Maven Artifact ID</label>
-                                        <input type="text" id="artifactId" name="artifactId" placeholder="api-service">
-                                        <small>Maven project artifact ID</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="javaVersion">Java Version</label>
-                                        <select id="javaVersion" name="javaVersion">
-                                            <option value="17">Java 17</option>
-                                            <option value="21" selected>Java 21</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="preview-actions">
-                                <button type="button" onclick="downloadAggregatedSpecNow()" class="btn-secondary">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                    Download Spec Only
-                                </button>
-                                <button type="button" onclick="proceedToGeneration()" class="btn-primary">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="16 18 22 12 16 6"></polyline>
-                                        <polyline points="8 6 2 12 8 18"></polyline>
-                                    </svg>
-                                    Generate SDK
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Remove old spec aggregator section -->
-                    <div class="form-group aggregator-section">
-                        <label class="section-label">
-                            🔄 Spec Aggregator
-                            <span class="badge-new">NEW</span>
-                        </label>
-                        <p class="section-description">
-                            Create a consolidated OpenAPI spec by merging all uploaded specifications. Useful for creating unified API gateways or combined documentation.
-                        </p>
-                        <div id="aggregatorConfig" class="aggregator-config">
-                            <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 16px;">
-                                <input type="checkbox" id="enableAggregator" style="margin-right: 12px; margin-top: 3px;">
-                                <div>
-                                    <strong>Enable Spec Aggregation</strong>
-                                    <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                        Merge all specs into a single consolidated OpenAPI specification with smart conflict resolution
-                                    </small>
-                                </div>
-                            </label>
-
-                            <div id="aggregatorOptions" class="hidden aggregator-options-container">
-                                <div class="form-section">
-                                    <label class="option-label">Aggregated Spec Name</label>
-                                    <input type="text" id="aggregatedSpecName" placeholder="unified-api" value="unified-api" class="input-field">
-                                    <small class="input-hint">
-                                        Name for the aggregated specification
-                                    </small>
-                                </div>
-
-                                <div class="form-section">
-                                    <label class="option-label">Endpoint Merging Strategy</label>
-                                    <p class="section-description" style="margin-bottom: 12px;">
-                                        Configure how duplicate paths across specs should be merged
-                                    </p>
-                                    <div id="endpointMergeList" class="endpoint-merge-list">
-                                        <!-- Populated dynamically with duplicate paths -->
-                                    </div>
-                                    <button type="button" id="scanForDuplicates" class="btn-scan">
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <circle cx="11" cy="11" r="8"></circle>
-                                            <path d="m21 21-4.35-4.35"></path>
-                                        </svg>
-                                        Scan for Duplicate Endpoints
-                                    </button>
-                                </div>
-
-                                <div class="form-section">
-                                    <label class="option-label">Payload Mapping</label>
-                                    <p class="section-description" style="margin-bottom: 12px;">
-                                        Map fields between different API schemas
-                                    </p>
-                                    <div id="payloadMappingList" class="payload-mapping-list">
-                                        <!-- Populated dynamically -->
-                                    </div>
-                                    <button type="button" id="addPayloadMapping" class="btn-scan">
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                        Add Payload Mapping
-                                    </button>
-                                </div>
-
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">Aggregation Output</label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; margin-bottom: 8px;">
-                                        <input type="checkbox" id="downloadAggregatedSpec" checked style="margin-right: 8px;">
-                                        <span>Download aggregated spec file</span>
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center; margin-bottom: 8px;">
-                                        <input type="checkbox" id="generateFromAggregated" checked style="margin-right: 8px;">
-                                        <span>Generate SDKs from aggregated spec</span>
-                                    </label>
-                                    <label class="checkbox-label" style="display: flex; align-items: center;">
-                                        <input type="checkbox" id="showAggregatedPreview" style="margin-right: 8px;">
-                                        <span>Show preview in browser</span>
-                                    </label>
-                                </div>
-
-                                <div style="margin-bottom: 16px;">
-                                    <label style="display: block; font-weight: 500; margin-bottom: 8px;">CO2 Emission Tracking</label>
-                                    <label class="checkbox-label" style="display: flex; align-items: start; margin-bottom: 8px;">
-                                        <input type="checkbox" id="enableCO2Tracking" style="margin-right: 8px; margin-top: 3px;">
-                                        <div>
-                                            <span>Add CO2 emission annotations</span>
-                                            <small style="display: block; color: #6B7280; margin-top: 4px;">
-                                                Include x-co2-impact extensions and generate tracking code for monitoring API carbon footprint
-                                            </small>
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <div style="padding: 12px; background: #EEF2FF; border-left: 3px solid #4F46E5; border-radius: 4px; font-size: 0.85rem;">
-                                    <strong>Aggregation Strategy:</strong><br>
-                                    • <strong>Operations:</strong> Merge duplicate paths, combine parameters<br>
-                                    • <strong>Schemas:</strong> Smart merge if compatible, rename if conflicts<br>
-                                    • <strong>Headers:</strong> Union of all unique headers<br>
-                                    • <strong>CO2:</strong> Add sustainability tracking to each endpoint
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="button" onclick="proceedToPreview()" class="btn-primary btn-proceed">
-                            Preview Aggregated Spec
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+            <!-- Step 2: Select SDK Type -->
+            <div class="step-section" id="step2">
+                <div class="step-header">
+                    <span class="step-number">2</span>
+                    <h2>Select SDK Type</h2>
                 </div>
 
-                    <!-- Step 3: Preview & Download -->
-                    <div id="previewStep" class="workflow-step hidden">
-                        <div class="spec-manager-header">
-                            <div>
-                                <h3>👁️ Step 3: Preview & Download</h3>
-                                <p class="spec-manager-description">
-                                    Review the aggregated specification before downloading or generating SDKs
-                                </p>
-                            </div>
-                            <button type="button" onclick="backToSpecManager()" class="btn-back">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                Back
-                            </button>
+                <div class="sdk-type-grid">
+                    <label class="sdk-type-card" data-type="react">
+                        <input type="radio" name="sdkType" value="react" checked>
+                        <div class="sdk-type-content">
+                            <span class="sdk-icon">⚛️</span>
+                            <strong>React + Redux SDK</strong>
+                            <small>TypeScript client with RTK Query</small>
                         </div>
+                    </label>
 
-                        <div class="preview-container">
-                            <div class="preview-summary">
-                                <h4>Aggregation Summary</h4>
-                                <div id="previewSummary" class="summary-stats">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
+                    <label class="sdk-type-card featured" data-type="quarkus-fullstack">
+                        <input type="radio" name="sdkType" value="quarkus-fullstack">
+                        <div class="sdk-type-content">
+                            <span class="sdk-icon">⚡</span>
+                            <strong>Quarkus Full Stack</strong>
+                            <small>Backend + Client SDK</small>
+                        </div>
+                    </label>
 
-                            <div class="preview-content">
-                                <div class="preview-tabs">
-                                    <button class="preview-tab active" onclick="switchPreviewTab('summary')">Summary</button>
-                                    <button class="preview-tab" onclick="switchPreviewTab('yaml')">YAML Preview</button>
-                                    <button class="preview-tab" onclick="switchPreviewTab('changes')">Changes</button>
-                                </div>
+                    <label class="sdk-type-card" data-type="spring-boot-client">
+                        <input type="radio" name="sdkType" value="spring-boot-client">
+                        <div class="sdk-type-content">
+                            <span class="sdk-icon">🍃</span>
+                            <strong>Spring Boot Client</strong>
+                            <small>Java client library</small>
+                        </div>
+                    </label>
 
-                                <div id="previewTabContent" class="preview-tab-content">
-                                    <!-- Populated dynamically -->
-                                </div>
-                            </div>
+                    <label class="sdk-type-card" data-type="quarkus-client">
+                        <input type="radio" name="sdkType" value="quarkus-client">
+                        <div class="sdk-type-content">
+                            <span class="sdk-icon">🔗</span>
+                            <strong>Quarkus Client</strong>
+                            <small>Java client library</small>
+                        </div>
+                    </label>
+                </div>
 
-                            <!-- SDK Type Selection -->
-                            <div class="form-group" style="margin-top: 24px;">
-                                <label class="section-label">🛠️ SDK Type to Generate <span style="color: #6B7280; font-weight: normal; font-size: 0.9rem;">(Select one)</span></label>
-                                <p class="section-description">
-                                    Choose which SDK you want to generate from the aggregated spec
-                                </p>
-                                <div class="sdk-types">
-                                    <label class="sdk-type-option">
-                                        <input type="radio" name="sdkTypePreview" value="react" checked>
-                                        <span class="sdk-type-label">
-                                            <strong>React + Redux SDK</strong>
-                                            <small>TypeScript client with RTK Query & Redux Toolkit</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px solid #10B981; background: #ECFDF5;">
-                                        <input type="radio" name="sdkTypePreview" value="quarkus-fullstack">
-                                        <span class="sdk-type-label">
-                                            <strong>Quarkus Full Stack ⚡</strong>
-                                            <small>Backend + Client SDK with automatic header propagation for inter-service calls</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                                        <input type="radio" name="sdkTypePreview" value="spring-boot-client">
-                                        <span class="sdk-type-label">
-                                            <strong>Spring Boot Client 🔗</strong>
-                                            <small>Java client library to call this API from another Spring Boot service</small>
-                                        </span>
-                                    </label>
-                                    <label class="sdk-type-option" style="border: 2px dashed #4F46E5; background: #EEF2FF;">
-                                        <input type="radio" name="sdkTypePreview" value="quarkus-client">
-                                        <span class="sdk-type-label">
-                                            <strong>Quarkus Client 🔗</strong>
-                                            <small>Java client library to call this API from another Quarkus service</small>
-                                        </span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div id="javaOptionsPreview" class="java-options hidden" style="margin-top: 16px;">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="packageNamePreview">Java Package Name</label>
-                                        <input type="text" id="packageNamePreview" name="packageNamePreview" placeholder="com.example.api">
-                                        <small>Base package for generated Java code</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="groupIdPreview">Maven Group ID</label>
-                                        <input type="text" id="groupIdPreview" name="groupIdPreview" placeholder="com.example">
-                                        <small>Maven project group ID</small>
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="artifactIdPreview">Maven Artifact ID</label>
-                                        <input type="text" id="artifactIdPreview" name="artifactIdPreview" placeholder="api-service">
-                                        <small>Maven project artifact ID</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="javaVersionPreview">Java Version</label>
-                                        <select id="javaVersionPreview" name="javaVersionPreview">
-                                            <option value="17">Java 17</option>
-                                            <option value="21" selected>Java 21</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="preview-actions">
-                                <button type="button" onclick="downloadAggregatedSpecNow()" class="btn-secondary">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                    Download Spec Only
-                                </button>
-                                <button type="button" onclick="proceedToGeneration()" class="btn-primary">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="16 18 22 12 16 6"></polyline>
-                                        <polyline points="8 6 2 12 8 18"></polyline>
-                                    </svg>
-                                    Generate SDK
-                                </button>
-                            </div>
+                <!-- Java Options (shown when Java SDK selected) -->
+                <div id="javaOptions" class="java-options hidden">
+                    <h3>☕ Java Project Settings</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="packageName">Package Name</label>
+                            <input type="text" id="packageName" value="com.example.api">
+                        </div>
+                        <div class="form-group">
+                            <label for="groupId">Group ID</label>
+                            <input type="text" id="groupId" value="com.example">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="artifactId">Artifact ID</label>
+                            <input type="text" id="artifactId" value="api-service">
+                        </div>
+                        <div class="form-group">
+                            <label for="javaVersion">Java Version</label>
+                            <select id="javaVersion">
+                                <option value="17">Java 17</option>
+                                <option value="21" selected>Java 21</option>
+                            </select>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <button type="submit" id="generateBtn" class="btn-primary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- Step 3: Generate -->
+            <div class="step-section" id="step3">
+                <div class="step-header">
+                    <span class="step-number">3</span>
+                    <h2>Generate SDK</h2>
+                </div>
+
+                <button type="button" id="generateBtn" class="btn-primary btn-large">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="16 18 22 12 16 6"></polyline>
                         <polyline points="8 6 2 12 8 18"></polyline>
                     </svg>
                     Generate SDK
                 </button>
-            </form>
+            </div>
 
+            <!-- Progress -->
             <div id="progressContainer" class="progress-container hidden">
                 <div class="progress-bar">
                     <div id="progressBar" class="progress-fill"></div>
                 </div>
-                <p id="progressText" class="progress-text">Uploading and processing...</p>
+                <p id="progressText" class="progress-text">Processing...</p>
             </div>
 
+            <!-- Error Message -->
             <div id="errorContainer" class="error-container hidden">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -763,230 +288,22 @@
                 <p id="errorText"></p>
             </div>
 
+            <!-- Success Message -->
             <div id="successContainer" class="success-container hidden">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="9 12 12 15 16 10"></polyline>
                 </svg>
-                <p>SDK generated successfully! Your download should start automatically.</p>
+                <p>SDK generated successfully! Download started.</p>
             </div>
         </div>
-
-        <!-- Create Mode Card -->
-        <div class="card hidden" id="createModeCard">
-            <div class="create-mode-header">
-                <h2>Create OpenAPI Specification</h2>
-                <p class="subtitle">Build your API specification from scratch with an interactive form</p>
-            </div>
-
-            <!-- API Info Section -->
-            <div class="spec-section">
-                <h3 class="section-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
-                    API Information
-                </h3>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="specTitle">API Title *</label>
-                        <input type="text" id="specTitle" placeholder="My API" value="My API">
-                        <small>The name of your API</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="specVersion">Version *</label>
-                        <input type="text" id="specVersion" placeholder="1.0.0" value="1.0.0">
-                        <small>API version (e.g., 1.0.0, 2.1.0)</small>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="specOpenAPIVersion">OpenAPI Version</label>
-                        <select id="specOpenAPIVersion">
-                            <option value="3.1.0">3.1.0</option>
-                            <option value="3.0.3">3.0.3</option>
-                            <option value="3.0.2">3.0.2</option>
-                            <option value="3.0.1">3.0.1</option>
-                            <option value="3.0.0">3.0.0</option>
-                        </select>
-                        <small>OpenAPI Specification version</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="specBaseUrl">Base URL *</label>
-                        <input type="text" id="specBaseUrl" placeholder="https://api.example.com" value="https://api.example.com">
-                        <small>The base URL for your API</small>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="specDescription">Description</label>
-                    <textarea id="specDescription" rows="3" placeholder="A brief description of your API"></textarea>
-                    <small>Optional description of what your API does</small>
-                </div>
-            </div>
-
-            <!-- Schemas Section -->
-            <div class="spec-section">
-                <div class="section-header">
-                    <h3 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="9" y1="3" x2="9" y2="21"></line>
-                        </svg>
-                        Data Schemas
-                    </h3>
-                    <button type="button" id="addSchema" class="btn-add">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14"></path>
-                        </svg>
-                        Add Schema
-                    </button>
-                </div>
-                <p class="section-description">Define data models for request and response bodies</p>
-                <div id="schemasList" class="items-list">
-                    <div class="empty-state">No schemas added yet. Click "Add Schema" to create one.</div>
-                </div>
-            </div>
-
-            <!-- Endpoints Section -->
-            <div class="spec-section">
-                <div class="section-header">
-                    <h3 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                        </svg>
-                        API Endpoints
-                    </h3>
-                    <button type="button" id="addEndpoint" class="btn-add">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14"></path>
-                        </svg>
-                        Add Endpoint
-                    </button>
-                </div>
-                <p class="section-description">Define the API operations and their parameters</p>
-                <div id="endpointsList" class="items-list">
-                    <div class="empty-state">No endpoints added yet. Click "Add Endpoint" to create one.</div>
-                </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="create-mode-actions">
-                <button type="button" id="previewSpec" class="btn-secondary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                    Preview Spec
-                </button>
-                <button type="button" id="downloadSpec" class="btn-secondary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download YAML
-                </button>
-                <button type="button" id="generateFromCreated" class="btn-primary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="16 18 22 12 16 6"></polyline>
-                        <polyline points="8 6 2 12 8 18"></polyline>
-                    </svg>
-                    Generate SDK
-                </button>
-            </div>
-        </div>
-
-        <!-- Spec Preview Modal -->
-        <div id="specPreviewModal" class="modal hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Aggregated Spec Preview</h2>
-                    <button id="closePreviewModal" class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div id="specPreviewInfo" class="preview-info"></div>
-                    <pre id="specPreviewContent" class="preview-content"></pre>
-                </div>
-                <div class="modal-footer">
-                    <button id="copySpecContent" class="btn-secondary">Copy to Clipboard</button>
-                    <button id="downloadSpecFromPreview" class="btn-primary">Download YAML</button>
-                </div>
-            </div>
-        </div>
-
 
         <footer class="footer">
-            <p>Made with ❤️ by OpenAPI Redux SDK Generator</p>
-            <p>
-                <a href="https://github.com/your-username/openapi-redux-sdk-generator" target="_blank">View on GitHub</a>
-                <span style="margin: 0 10px;">•</span>
-                <a href="https://www.paypal.com/paypalme/acommunitybookshop" target="_blank">Support with a Donation</a>
-            </p>
+            <p>Made with ❤️ by OpenAPI SDK Generator</p>
         </footer>
     </div>
 
-    <!-- Upload Options Modal -->
-    <div id="uploadOptionsModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2>What would you like to do?</h2>
-                <button class="modal-close" onclick="closeUploadOptionsModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <p style="color: #6B7280; margin-bottom: 24px;">
-                    You've uploaded <strong id="uploadedSpecCount">0 spec(s)</strong>. Choose how you want to proceed:
-                </p>
-
-                <div class="option-cards">
-                    <!-- Option 1: Direct SDK Generation -->
-                    <div class="option-card" onclick="selectUploadOption('direct-generate')">
-                        <div class="option-icon">🚀</div>
-                        <div class="option-content">
-                            <h3>Generate SDK Directly</h3>
-                            <p>Skip to SDK generation with current configuration</p>
-                        </div>
-                        <div class="option-arrow">→</div>
-                    </div>
-
-                    <!-- Option 2: Spec Aggregator -->
-                    <div class="option-card" onclick="selectUploadOption('aggregator')">
-                        <div class="option-icon">🔀</div>
-                        <div class="option-content">
-                            <h3>Spec Aggregator (2-to-1)</h3>
-                            <p>Consolidate multiple endpoints into one aggregated API</p>
-                        </div>
-                        <div class="option-arrow">→</div>
-                    </div>
-
-                    <!-- Option 3: Main + Clients -->
-                    <div class="option-card" onclick="selectUploadOption('main-clients')">
-                        <div class="option-icon">🌐</div>
-                        <div class="option-content">
-                            <h3>Main Service + Clients</h3>
-                            <p>Generate main service with client SDKs for dependencies</p>
-                        </div>
-                        <div class="option-arrow">→</div>
-                    </div>
-
-                    <!-- Option 4: Configure First -->
-                    <div class="option-card" onclick="selectUploadOption('configure')">
-                        <div class="option-icon">⚙️</div>
-                        <div class="option-content">
-                            <h3>Configure Advanced Options</h3>
-                            <p>Set headers, business logic, and other advanced settings</p>
-                        </div>
-                        <div class="option-arrow">→</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="generator.js"></script>
-    <script src="app.js"></script>
-    <script src="spec-builder.js"></script>
+    <script src="app-simple.js"></script>
 </body>
 </html>

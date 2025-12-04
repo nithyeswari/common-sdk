@@ -13,3 +13,9 @@ output/
 firebase-debug.log
 ui-debug.log
 functions/lib/
+.claude/settings.local.json
+CProjectscommon-sdkpublicstyles.css
+logs/*
+nul 
+test-quarkus-client/*
+.claude/settings.local.json

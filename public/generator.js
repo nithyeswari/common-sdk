@@ -113,7 +113,8 @@ class SDKGenerator {
   async aggregateSpecs(parsedAPIs, options = {}) {
     const {
       name = 'unified-api',
-      enableCO2Tracking = false
+      enableCO2Tracking = false,
+      consolidationRules = []  // Array of 2-to-1 consolidation rules
     } = options;
 
     if (!parsedAPIs || parsedAPIs.length === 0) {
@@ -244,7 +245,638 @@ class SDKGenerator {
       aggregated.components.parameters[paramName] = header;
     });
 
+    // Apply 2-to-1 consolidation rules
+    if (consolidationRules && consolidationRules.length > 0) {
+      this.applyConsolidationRules(aggregated, parsedAPIs, consolidationRules, enableCO2Tracking);
+    }
+
     return aggregated;
+  }
+
+  /**
+   * Apply 2-to-1 consolidation rules to create merged endpoints
+   * This merges 2 different endpoints into 1 consolidated endpoint with all headers and payload info
+   */
+  applyConsolidationRules(aggregatedSpec, parsedAPIs, consolidationRules, enableCO2Tracking) {
+    console.log('Applying consolidation rules:', consolidationRules.length);
+
+    consolidationRules.forEach(rule => {
+      console.log('Processing rule:', rule.id, 'type:', rule.type);
+
+      if (rule.type !== '2-to-1-consolidation') {
+        console.log('Skipping non-consolidation rule');
+        return;
+      }
+
+      // Get source endpoints from the rule - use the stored operation data
+      const endpoint1 = this.getEndpointFromRule(parsedAPIs, rule.endpoint1);
+      const endpoint2 = this.getEndpointFromRule(parsedAPIs, rule.endpoint2);
+
+      console.log('Endpoint1:', endpoint1?.path, 'Endpoint2:', endpoint2?.path);
+
+      if (!endpoint1 || !endpoint2) {
+        console.warn('Could not find source endpoints for consolidation rule:', rule.id);
+        return;
+      }
+
+      // Create the consolidated endpoint using the user-edited merged data from the rule
+      const consolidatedEndpoint = this.createConsolidatedEndpointFromRule(
+        endpoint1,
+        endpoint2,
+        rule,
+        enableCO2Tracking
+      );
+
+      // Add to the aggregated spec at the user-specified path
+      const consolidatedPath = rule.path || '/api/aggregated';
+      const consolidatedMethod = (rule.method || 'post').toLowerCase();
+
+      console.log('Adding consolidated endpoint:', consolidatedMethod.toUpperCase(), consolidatedPath);
+
+      if (!aggregatedSpec.paths[consolidatedPath]) {
+        aggregatedSpec.paths[consolidatedPath] = {};
+      }
+      aggregatedSpec.paths[consolidatedPath][consolidatedMethod] = consolidatedEndpoint;
+
+      // Also add consolidated response schema to components
+      const responseSchemaName = `${this.toPascalCase(consolidatedPath.replace(/[^a-zA-Z0-9]/g, ''))}Response`;
+      if (consolidatedEndpoint.responses?.['200']?.content?.['application/json']?.schema) {
+        aggregatedSpec.components.schemas[responseSchemaName] =
+          consolidatedEndpoint.responses['200'].content['application/json'].schema;
+      }
+
+      // Add request body schema if present
+      if (consolidatedEndpoint.requestBody?.content?.['application/json']?.schema) {
+        const requestSchemaName = `${this.toPascalCase(consolidatedPath.replace(/[^a-zA-Z0-9]/g, ''))}Request`;
+        aggregatedSpec.components.schemas[requestSchemaName] =
+          consolidatedEndpoint.requestBody.content['application/json'].schema;
+      }
+    });
+  }
+
+  /**
+   * Get endpoint operation from parsed APIs based on rule reference
+   */
+  getEndpointFromRule(parsedAPIs, endpointRef) {
+    if (!endpointRef) return null;
+
+    const { apiIndex, opIndex, operation, api } = endpointRef;
+
+    // First, try to use the stored operation data directly from the rule
+    if (operation && operation.method && operation.path) {
+      return {
+        ...operation,
+        sourceAPI: api || 'Unknown',
+        operationId: operation.operationId || `${operation.method}_${operation.path.replace(/[^a-zA-Z0-9]/g, '_')}`
+      };
+    }
+
+    // Fallback: Try to get from parsed APIs by index
+    if (apiIndex !== undefined && opIndex !== undefined && parsedAPIs) {
+      const apiData = parsedAPIs[apiIndex];
+      if (apiData && apiData.operations && apiData.operations[opIndex]) {
+        return {
+          ...apiData.operations[opIndex],
+          sourceAPI: apiData.title || apiData.fileName
+        };
+      }
+    }
+
+    // Fallback: search by method and path in parsedAPIs
+    if (operation && parsedAPIs) {
+      for (const apiData of parsedAPIs) {
+        const found = apiData.operations?.find(op =>
+          op.method.toLowerCase() === operation.method.toLowerCase() &&
+          op.path === operation.path
+        );
+        if (found) {
+          return { ...found, sourceAPI: apiData.title || apiData.fileName };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Create a consolidated endpoint using user-edited merged data from the rule
+   * This uses the mergedHeaders, mergedQueryParams, mergedRequestBodyFields, mergedResponseFields from the rule
+   */
+  createConsolidatedEndpointFromRule(endpoint1, endpoint2, rule, enableCO2Tracking) {
+    const { rules: consolidationOptions = {} } = rule;
+
+    // Use user-edited merged data if available, otherwise fall back to auto-merge
+    const hasUserEditedData = rule.mergedHeaders || rule.mergedQueryParams || rule.mergedRequestBodyFields;
+
+    if (hasUserEditedData) {
+      return this.buildConsolidatedEndpointFromUserData(endpoint1, endpoint2, rule, enableCO2Tracking);
+    } else {
+      return this.createConsolidatedEndpoint(endpoint1, endpoint2, rule, enableCO2Tracking);
+    }
+  }
+
+  /**
+   * Build consolidated endpoint from user-edited merged data
+   */
+  buildConsolidatedEndpointFromUserData(endpoint1, endpoint2, rule, enableCO2Tracking) {
+    // Build parameters from user-edited data
+    const parameters = [];
+
+    // Add headers
+    (rule.mergedHeaders || []).forEach(h => {
+      if (h.enabled !== false) {
+        parameters.push({
+          name: h.name,
+          in: 'header',
+          required: h.required || false,
+          description: h.description || `Header from ${h.source || h.sources?.join(', ') || 'consolidated'}`,
+          schema: { type: h.type || 'string', default: h.defaultValue || undefined }
+        });
+      }
+    });
+
+    // Add query params
+    (rule.mergedQueryParams || []).forEach(p => {
+      if (p.enabled !== false) {
+        parameters.push({
+          name: p.name,
+          in: 'query',
+          required: p.required || false,
+          description: p.description || `Query param from ${p.source || 'consolidated'}`,
+          schema: { type: p.type || p.schema?.type || 'string', default: p.defaultValue || undefined }
+        });
+      }
+    });
+
+    // Add path params
+    (rule.mergedPathParams || []).forEach(p => {
+      if (p.enabled !== false) {
+        parameters.push({
+          name: p.name,
+          in: 'path',
+          required: true,
+          description: p.description || `Path param from ${p.source || 'consolidated'}`,
+          schema: { type: p.type || p.schema?.type || 'string' }
+        });
+      }
+    });
+
+    // Build request body from user-edited fields
+    let requestBody = null;
+    const requestFields = (rule.mergedRequestBodyFields || []).filter(f => f.enabled !== false);
+    if (requestFields.length > 0) {
+      const properties = {};
+      const required = [];
+
+      requestFields.forEach(f => {
+        properties[f.name] = {
+          type: f.type || 'string',
+          description: f.description || `Field from ${f.source || f.sources?.join(', ') || 'consolidated'}`
+        };
+        if (f.defaultValue) {
+          properties[f.name].default = f.defaultValue;
+        }
+        if (f.required) {
+          required.push(f.name);
+        }
+      });
+
+      requestBody = {
+        description: `Consolidated request body combining data for both endpoints`,
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties,
+              required: required.length > 0 ? required : undefined
+            }
+          }
+        }
+      };
+    }
+
+    // Build response from user-edited fields
+    const responseFields = (rule.mergedResponseFields || []).filter(f => f.enabled !== false);
+    const responseProperties = {
+      success: { type: 'boolean', description: 'Whether the consolidated operation succeeded' },
+      timestamp: { type: 'string', format: 'date-time', description: 'Response timestamp' }
+    };
+
+    // Add endpoint1 response wrapper
+    responseProperties[`${(endpoint1.sourceAPI || 'endpoint1').replace(/[^a-zA-Z0-9]/g, '')}Data`] = {
+      type: 'object',
+      description: `Response data from ${endpoint1.sourceAPI || 'endpoint 1'} (${endpoint1.method?.toUpperCase()} ${endpoint1.path})`
+    };
+
+    // Add endpoint2 response wrapper
+    responseProperties[`${(endpoint2.sourceAPI || 'endpoint2').replace(/[^a-zA-Z0-9]/g, '')}Data`] = {
+      type: 'object',
+      description: `Response data from ${endpoint2.sourceAPI || 'endpoint 2'} (${endpoint2.method?.toUpperCase()} ${endpoint2.path})`
+    };
+
+    // Add user-defined response fields
+    responseFields.forEach(f => {
+      responseProperties[f.name] = {
+        type: f.type || 'string',
+        description: f.description || `Field from ${f.source || f.sources?.join(', ') || 'consolidated'}`
+      };
+    });
+
+    const responses = {
+      '200': {
+        description: 'Successful consolidated response from both endpoints',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: responseProperties
+            }
+          }
+        }
+      },
+      '400': { description: 'Bad Request - Invalid parameters' },
+      '500': { description: 'Internal Server Error - One or more upstream calls failed' }
+    };
+
+    // Build the consolidated endpoint
+    const consolidated = {
+      summary: rule.summary || `Consolidated: ${endpoint1.summary || endpoint1.path} + ${endpoint2.summary || endpoint2.path}`,
+      description: this.buildConsolidatedDescription(endpoint1, endpoint2, rule),
+      operationId: `consolidated_${(rule.path || '/api/aggregated').replace(/[^a-zA-Z0-9]/g, '_')}`,
+      tags: ['consolidated', 'aggregator'],
+      parameters: parameters,
+      responses: responses,
+
+      // Add consolidation metadata
+      'x-consolidation': {
+        type: '2-to-1',
+        sources: [
+          {
+            client: endpoint1.sourceAPI,
+            endpoint: `${(endpoint1.method || 'GET').toUpperCase()} ${endpoint1.path}`,
+            description: endpoint1.summary || ''
+          },
+          {
+            client: endpoint2.sourceAPI,
+            endpoint: `${(endpoint2.method || 'GET').toUpperCase()} ${endpoint2.path}`,
+            description: endpoint2.summary || ''
+          }
+        ],
+        execution: rule.rules?.parallelCalls ? 'parallel' : 'sequential',
+        mergedContent: {
+          headersCount: (rule.mergedHeaders || []).filter(h => h.enabled !== false).length,
+          queryParamsCount: (rule.mergedQueryParams || []).filter(p => p.enabled !== false).length,
+          pathParamsCount: (rule.mergedPathParams || []).filter(p => p.enabled !== false).length,
+          requestFieldsCount: requestFields.length,
+          responseFieldsCount: responseFields.length
+        }
+      }
+    };
+
+    // Add request body if present
+    if (requestBody) {
+      consolidated.requestBody = requestBody;
+    }
+
+    // Add CO2 tracking if enabled
+    if (enableCO2Tracking) {
+      consolidated['x-co2-impact'] = {
+        enabled: true,
+        estimatedGramsPerRequest: 0.25,
+        note: 'Consolidated endpoint reduces network overhead'
+      };
+    }
+
+    return consolidated;
+  }
+
+  /**
+   * Create a consolidated endpoint from two source endpoints (auto-merge)
+   * Merges all headers, parameters, and payload information
+   */
+  createConsolidatedEndpoint(endpoint1, endpoint2, rule, enableCO2Tracking) {
+    const { rules: consolidationOptions = {} } = rule;
+
+    // Merge all parameters (path, query, header) from both endpoints
+    const mergedParameters = this.mergeAllParameters(
+      endpoint1.parameters || [],
+      endpoint2.parameters || [],
+      endpoint1.sourceAPI,
+      endpoint2.sourceAPI,
+      consolidationOptions.addSourceTracking
+    );
+
+    // Merge request bodies from both endpoints
+    const mergedRequestBody = this.mergeConsolidatedRequestBodies(
+      endpoint1.requestBody,
+      endpoint2.requestBody,
+      endpoint1.sourceAPI,
+      endpoint2.sourceAPI,
+      consolidationOptions.addSourceTracking
+    );
+
+    // Merge response schemas from both endpoints
+    const mergedResponse = this.mergeConsolidatedResponses(
+      endpoint1.responses,
+      endpoint2.responses,
+      endpoint1.sourceAPI,
+      endpoint2.sourceAPI,
+      consolidationOptions.addSourceTracking
+    );
+
+    // Build the consolidated endpoint
+    const consolidated = {
+      summary: rule.summary || `Consolidated: ${endpoint1.summary || endpoint1.path} + ${endpoint2.summary || endpoint2.path}`,
+      description: this.buildConsolidatedDescription(endpoint1, endpoint2, rule),
+      operationId: rule.operationId || `consolidated_${endpoint1.operationId || ''}_${endpoint2.operationId || ''}`.replace(/[^a-zA-Z0-9_]/g, ''),
+      tags: [...new Set([...(endpoint1.tags || []), ...(endpoint2.tags || []), 'consolidated'])],
+      parameters: mergedParameters,
+      responses: mergedResponse,
+
+      // Add consolidation metadata (x-consolidation)
+      'x-consolidation': {
+        type: '2-to-1',
+        sources: [
+          {
+            client: endpoint1.sourceAPI,
+            endpoint: `${endpoint1.method.toUpperCase()} ${endpoint1.path}`,
+            description: endpoint1.summary || endpoint1.description || '',
+            operationId: endpoint1.operationId
+          },
+          {
+            client: endpoint2.sourceAPI,
+            endpoint: `${endpoint2.method.toUpperCase()} ${endpoint2.path}`,
+            description: endpoint2.summary || endpoint2.description || '',
+            operationId: endpoint2.operationId
+          }
+        ],
+        rules: {
+          execution: consolidationOptions.parallelCalls ? 'parallel' : 'sequential',
+          failureStrategy: 'fail-fast',
+          timeout: 10000,
+          headerPropagation: this.extractPropagatedHeaders(mergedParameters)
+        },
+        mergedContent: {
+          parametersCount: mergedParameters.length,
+          headersCount: mergedParameters.filter(p => p.in === 'header').length,
+          queryParamsCount: mergedParameters.filter(p => p.in === 'query').length,
+          pathParamsCount: mergedParameters.filter(p => p.in === 'path').length,
+          hasRequestBody: !!mergedRequestBody,
+          responseFieldsCount: this.countResponseFields(mergedResponse)
+        }
+      }
+    };
+
+    // Add request body if either endpoint has one
+    if (mergedRequestBody) {
+      consolidated.requestBody = mergedRequestBody;
+    }
+
+    // Add CO2 tracking if enabled
+    if (enableCO2Tracking) {
+      const ep1Impact = this.estimateCO2Impact(endpoint1);
+      const ep2Impact = this.estimateCO2Impact(endpoint2);
+      const consolidatedImpact = (ep1Impact + ep2Impact) * 0.9; // 10% savings from consolidation
+
+      consolidated['x-co2-impact'] = {
+        enabled: true,
+        estimatedGramsPerRequest: parseFloat(consolidatedImpact.toFixed(3)),
+        calculationMethod: 'cloud-carbon-coefficients',
+        upstreamEmissions: [
+          { client: endpoint1.sourceAPI, endpoint: `${endpoint1.method.toUpperCase()} ${endpoint1.path}`, estimatedGrams: ep1Impact },
+          { client: endpoint2.sourceAPI, endpoint: `${endpoint2.method.toUpperCase()} ${endpoint2.path}`, estimatedGrams: ep2Impact }
+        ],
+        consolidationBenefit: {
+          withoutAggregator: parseFloat((ep1Impact + ep2Impact).toFixed(3)),
+          withAggregator: parseFloat(consolidatedImpact.toFixed(3)),
+          savingsGrams: parseFloat(((ep1Impact + ep2Impact) * 0.1).toFixed(3)),
+          savingsPercent: 10
+        }
+      };
+    }
+
+    return consolidated;
+  }
+
+  /**
+   * Merge all parameters from both endpoints with source tracking
+   */
+  mergeAllParameters(params1, params2, source1, source2, trackSource) {
+    const paramMap = new Map();
+
+    // Add parameters from first endpoint
+    params1.forEach(param => {
+      const key = `${param.in}:${param.name}`;
+      const paramWithSource = trackSource
+        ? { ...param, 'x-source': source1 }
+        : { ...param };
+      paramMap.set(key, paramWithSource);
+    });
+
+    // Add/merge parameters from second endpoint
+    params2.forEach(param => {
+      const key = `${param.in}:${param.name}`;
+      if (paramMap.has(key)) {
+        // Merge: combine required status, keep most specific schema
+        const existing = paramMap.get(key);
+        paramMap.set(key, {
+          ...existing,
+          required: existing.required || param.required,
+          description: existing.description || param.description,
+          schema: existing.schema || param.schema,
+          'x-sources': trackSource ? [source1, source2] : undefined
+        });
+      } else {
+        const paramWithSource = trackSource
+          ? { ...param, 'x-source': source2 }
+          : { ...param };
+        paramMap.set(key, paramWithSource);
+      }
+    });
+
+    return Array.from(paramMap.values());
+  }
+
+  /**
+   * Merge request bodies from both endpoints into a consolidated request body
+   */
+  mergeConsolidatedRequestBodies(body1, body2, source1, source2, trackSource) {
+    if (!body1 && !body2) return null;
+    if (!body1) return this.wrapRequestBodyWithSource(body2, source2, trackSource);
+    if (!body2) return this.wrapRequestBodyWithSource(body1, source1, trackSource);
+
+    // Both have request bodies - merge them
+    const mergedSchema = {
+      type: 'object',
+      properties: {},
+      required: []
+    };
+
+    // Add description
+    const description = `Consolidated request combining:\n- ${source1}: ${body1.description || 'Request body'}\n- ${source2}: ${body2.description || 'Request body'}`;
+
+    // Extract and merge properties from both bodies
+    const addPropertiesFromBody = (body, source) => {
+      const content = body.content?.['application/json'];
+      if (!content?.schema) return;
+
+      const schema = content.schema;
+      if (schema.properties) {
+        for (const [propName, propSchema] of Object.entries(schema.properties)) {
+          const finalPropName = trackSource && mergedSchema.properties[propName]
+            ? `${propName}_${source.replace(/[^a-zA-Z0-9]/g, '')}`
+            : propName;
+
+          mergedSchema.properties[finalPropName] = trackSource
+            ? { ...propSchema, 'x-source': source }
+            : propSchema;
+        }
+      }
+      if (schema.required) {
+        mergedSchema.required.push(...schema.required);
+      }
+    };
+
+    addPropertiesFromBody(body1, source1);
+    addPropertiesFromBody(body2, source2);
+
+    // Remove duplicate required fields
+    mergedSchema.required = [...new Set(mergedSchema.required)];
+    if (mergedSchema.required.length === 0) delete mergedSchema.required;
+
+    return {
+      description,
+      required: body1.required || body2.required,
+      content: {
+        'application/json': {
+          schema: mergedSchema
+        }
+      }
+    };
+  }
+
+  /**
+   * Wrap request body with source tracking
+   */
+  wrapRequestBodyWithSource(body, source, trackSource) {
+    if (!trackSource || !body) return body;
+
+    return {
+      ...body,
+      description: `${body.description || 'Request body'} (from ${source})`
+    };
+  }
+
+  /**
+   * Merge responses from both endpoints into a consolidated response
+   */
+  mergeConsolidatedResponses(responses1, responses2, source1, source2, trackSource) {
+    const merged = {
+      '200': {
+        description: 'Consolidated response from both source endpoints',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                consolidatedResult: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', description: 'Whether the consolidated operation succeeded' },
+                    upstreamCalls: { type: 'integer', description: 'Number of upstream API calls made' },
+                    duration: { type: 'integer', description: 'Total duration in milliseconds' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // Add response data from first endpoint
+    if (responses1?.['200']?.content?.['application/json']?.schema) {
+      const schema1 = responses1['200'].content['application/json'].schema;
+      const fieldName1 = trackSource
+        ? `${source1.replace(/[^a-zA-Z0-9]/g, '')}Response`
+        : 'endpoint1Response';
+
+      merged['200'].content['application/json'].schema.properties[fieldName1] = {
+        ...schema1,
+        description: `Response from ${source1}`
+      };
+    }
+
+    // Add response data from second endpoint
+    if (responses2?.['200']?.content?.['application/json']?.schema) {
+      const schema2 = responses2['200'].content['application/json'].schema;
+      const fieldName2 = trackSource
+        ? `${source2.replace(/[^a-zA-Z0-9]/g, '')}Response`
+        : 'endpoint2Response';
+
+      merged['200'].content['application/json'].schema.properties[fieldName2] = {
+        ...schema2,
+        description: `Response from ${source2}`
+      };
+    }
+
+    // Add error responses
+    merged['400'] = { description: 'Bad Request - Invalid parameters' };
+    merged['500'] = { description: 'Internal Server Error - One or more upstream calls failed' };
+
+    return merged;
+  }
+
+  /**
+   * Build consolidated endpoint description
+   */
+  buildConsolidatedDescription(endpoint1, endpoint2, rule) {
+    const execType = rule.rules?.parallelCalls ? 'parallel' : 'sequentially';
+
+    return `**Consolidated Endpoint**
+
+This endpoint consolidates two separate API calls into one:
+1. \`${endpoint1.method.toUpperCase()} ${endpoint1.path}\` (${endpoint1.sourceAPI})
+   ${endpoint1.summary || endpoint1.description || 'No description'}
+
+2. \`${endpoint2.method.toUpperCase()} ${endpoint2.path}\` (${endpoint2.sourceAPI})
+   ${endpoint2.summary || endpoint2.description || 'No description'}
+
+Both calls are made ${execType} and results are merged into a single response.
+
+**Merged Parameters:** All path, query, and header parameters from both endpoints are combined.
+**Merged Request Body:** Request bodies from both endpoints are merged into a single request object.
+**Merged Response:** Responses from both endpoints are combined with metadata about the consolidated operation.`;
+  }
+
+  /**
+   * Extract header names for propagation
+   */
+  extractPropagatedHeaders(parameters) {
+    return parameters
+      .filter(p => p.in === 'header')
+      .map(p => p.name);
+  }
+
+  /**
+   * Count response fields for metadata
+   */
+  countResponseFields(responses) {
+    const schema = responses?.['200']?.content?.['application/json']?.schema;
+    if (!schema?.properties) return 0;
+    return Object.keys(schema.properties).length;
+  }
+
+  /**
+   * Convert string to PascalCase
+   */
+  toPascalCase(str) {
+    return str
+      .replace(/[^a-zA-Z0-9]+/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
   }
 
   /**

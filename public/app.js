@@ -14,6 +14,66 @@ const successContainer = document.getElementById('successContainer');
 const sdkTypeCheckboxes = document.querySelectorAll('input[name="sdkType"]');
 const javaOptions = document.getElementById('javaOptions');
 
+// Selected SDK type from modal
+let selectedSdkTypeFromModal = null;
+
+// SDK Type Modal Functions
+function showSdkTypeModal() {
+    // Validate file is selected first
+    const files = fileInput.files;
+    if (!files || files.length === 0) {
+        alert('Please select an OpenAPI specification file first');
+        return;
+    }
+
+    // Reset selection
+    selectedSdkTypeFromModal = null;
+    const radios = document.querySelectorAll('input[name="sdkTypeModal"]');
+    radios.forEach(r => r.checked = false);
+
+    // Hide Java options
+    const javaOptionsModal = document.getElementById('javaOptionsModal');
+    if (javaOptionsModal) javaOptionsModal.classList.add('hidden');
+
+    // Show modal
+    document.getElementById('sdkTypeModal').classList.remove('hidden');
+}
+
+function closeSdkTypeModal() {
+    document.getElementById('sdkTypeModal').classList.add('hidden');
+}
+
+function selectSdkType(sdkType) {
+    selectedSdkTypeFromModal = sdkType;
+
+    // Check the radio button
+    const radio = document.querySelector(`input[name="sdkTypeModal"][value="${sdkType}"]`);
+    if (radio) radio.checked = true;
+
+    // Show/hide Java options
+    const javaOptionsModal = document.getElementById('javaOptionsModal');
+    const javaSDKs = ['spring-boot', 'quarkus', 'quarkus-fullstack', 'spring-boot-client', 'quarkus-client'];
+
+    if (javaSDKs.includes(sdkType)) {
+        javaOptionsModal.classList.remove('hidden');
+    } else {
+        javaOptionsModal.classList.add('hidden');
+    }
+}
+
+function confirmGenerateSdk() {
+    if (!selectedSdkTypeFromModal) {
+        alert('Please select an SDK type');
+        return;
+    }
+
+    // Close modal
+    closeSdkTypeModal();
+
+    // Trigger SDK generation
+    generateSdkWithType(selectedSdkTypeFromModal);
+}
+
 // State for multi-spec configuration (must be declared before functions that use them)
 let parsedAPIs = [];
 let allHeaders = new Set();
@@ -91,8 +151,33 @@ function updateJavaOptionsPreviewVisibility() {
     }
 }
 
+// Update Java options visibility for main form
+function updateJavaOptionsMainVisibility() {
+    const selectedSDK = document.querySelector('input[name="sdkTypeMain"]:checked')?.value;
+    const javaSDKs = ['spring-boot', 'quarkus', 'quarkus-fullstack', 'spring-boot-client', 'quarkus-client'];
+    const javaOptionsMain = document.getElementById('javaOptionsMain');
+
+    if (!javaOptionsMain) {
+        console.warn('javaOptionsMain element not found');
+        return;
+    }
+
+    if (javaSDKs.includes(selectedSDK)) {
+        javaOptionsMain.classList.remove('hidden');
+    } else {
+        javaOptionsMain.classList.add('hidden');
+    }
+}
+
 // Add event listeners to SDK type radio buttons (with delay to ensure DOM is ready)
 function initSDKRadioListeners() {
+    // Main form SDK type listeners
+    const sdkTypeMainRadios = document.querySelectorAll('input[name="sdkTypeMain"]');
+    sdkTypeMainRadios.forEach(radio => {
+        radio.addEventListener('change', updateJavaOptionsMainVisibility);
+    });
+    updateJavaOptionsMainVisibility();
+
     const sdkTypeRadios = document.querySelectorAll('input[name="sdkType"]');
     sdkTypeRadios.forEach(radio => {
         radio.addEventListener('change', updateJavaOptionsVisibility);
@@ -351,28 +436,26 @@ function populateHeaderConfig() {
     const headerConfig = document.getElementById('headerConfig');
     headerConfig.innerHTML = '';
 
-    // Default headers that should always be propagated
-    const defaultHeaders = [
-        { name: 'Authorization', propagate: true, transform: false },
-        { name: 'X-Request-ID', propagate: true, transform: false },
-        { name: 'X-Correlation-ID', propagate: true, transform: false },
-        { name: 'X-Tenant-ID', propagate: true, transform: false }
-    ];
-
-    // Merge with detected headers
+    // Only use headers that are actually detected from the specs
+    // Don't add hardcoded default headers that aren't in the client specs
     const allHeadersList = Array.from(allHeaders);
-    defaultHeaders.forEach(h => {
-        if (!allHeadersList.includes(h.name)) {
-            allHeadersList.unshift(h.name);
-        }
-    });
 
-    // Initialize selectedHeaders from saved data or defaults
+    // Show message if no headers found
+    if (allHeadersList.length === 0) {
+        headerConfig.innerHTML = `
+            <div class="no-headers-message" style="padding: 16px; color: #6B7280; text-align: center; font-style: italic;">
+                No header parameters found in the uploaded specs.<br>
+                <small>Headers will be automatically detected from your OpenAPI specification's operation parameters.</small>
+            </div>
+        `;
+        return;
+    }
+
+    // Initialize selectedHeaders from saved data - default to propagate: true for detected headers
     allHeadersList.forEach(headerName => {
         if (!selectedHeaders[headerName]) {
-            const defaultHeader = defaultHeaders.find(h => h.name === headerName);
             selectedHeaders[headerName] = {
-                propagate: defaultHeader ? defaultHeader.propagate : false,
+                propagate: true,  // Default to propagate for headers found in spec
                 transform: false
             };
         }
@@ -425,10 +508,8 @@ document.getElementById('addCustomHeader')?.addEventListener('click', () => {
     }
 });
 
-// Handle form submission
-uploadForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
+// Generate SDK with specified type (called from modal)
+async function generateSdkWithType(sdkType) {
     // Hide previous messages
     errorContainer.classList.add('hidden');
     successContainer.classList.add('hidden');
@@ -447,23 +528,33 @@ uploadForm.addEventListener('submit', async (e) => {
             throw new Error('Please select at least one file');
         }
 
-        // Get selected SDK types
-        const selectedSDKTypes = Array.from(sdkTypeCheckboxes)
-            .filter(cb => cb.checked)
-            .map(cb => cb.value);
+        console.log('Generating SDK with type:', sdkType);
 
-        if (selectedSDKTypes.length === 0) {
-            throw new Error('Please select at least one SDK type');
-        }
+        // Wrap in array for compatibility with the rest of the code
+        const selectedSDKTypes = [sdkType];
 
         const moduleName = moduleNameInput.value || 'api';
         const baseURL = baseURLInput.value || undefined;
 
-        // Get Java options if needed
-        const javaPackage = document.getElementById('packageName').value || 'com.example.api';
-        const groupId = document.getElementById('groupId').value || 'com.example';
-        const artifactId = document.getElementById('artifactId').value || 'api-service';
-        const javaVersion = document.getElementById('javaVersion').value || '21';
+        // Get Java options - prioritize modal inputs
+        const javaPackage = document.getElementById('packageNameModal')?.value
+            || document.getElementById('packageNameMain')?.value
+            || document.getElementById('packageName')?.value
+            || 'com.example.api';
+        const groupId = document.getElementById('groupIdModal')?.value
+            || document.getElementById('groupIdMain')?.value
+            || document.getElementById('groupId')?.value
+            || 'com.example';
+        const artifactId = document.getElementById('artifactIdModal')?.value
+            || document.getElementById('artifactIdMain')?.value
+            || document.getElementById('artifactId')?.value
+            || 'api-service';
+        const javaVersion = document.getElementById('javaVersionModal')?.value
+            || document.getElementById('javaVersionMain')?.value
+            || document.getElementById('javaVersion')?.value
+            || '21';
+
+        console.log('Java options:', { javaPackage, groupId, artifactId, javaVersion });
 
         // Read all files
         progressBar.style.width = '15%';
@@ -517,14 +608,65 @@ uploadForm.addEventListener('submit', async (e) => {
             const generateFromAggregated = document.getElementById('generateFromAggregated')?.checked || false;
             const showAggregatedPreview = document.getElementById('showAggregatedPreview')?.checked || false;
 
-            // Aggregate all specs
+            // Load consolidation rules from session storage
+            let storedConsolidationRules = [];
+            try {
+                const storedRules = sessionStorage.getItem('consolidation_rules');
+                console.log('Raw consolidation rules from sessionStorage:', storedRules);
+                if (storedRules) {
+                    storedConsolidationRules = JSON.parse(storedRules);
+                    console.log('Parsed consolidation rules:', storedConsolidationRules);
+                }
+            } catch (e) {
+                console.warn('Failed to load consolidation rules:', e);
+            }
+
+            // Also check in-memory consolidationRules array
+            if (typeof consolidationRules !== 'undefined' && consolidationRules.length > 0) {
+                console.log('In-memory consolidationRules:', consolidationRules);
+                // Merge with stored rules if different
+                consolidationRules.forEach(rule => {
+                    if (!storedConsolidationRules.find(r => r.id === rule.id)) {
+                        storedConsolidationRules.push(rule);
+                    }
+                });
+            }
+
+            console.log('Final consolidation rules to apply:', storedConsolidationRules.length, storedConsolidationRules);
+
+            // Aggregate all specs with consolidation rules
             aggregatedSpec = await generator.aggregateSpecs(parsedAPIs, {
                 name: aggregatedSpecName,
-                enableCO2Tracking: enableCO2Tracking
+                enableCO2Tracking: enableCO2Tracking,
+                consolidationRules: storedConsolidationRules
             });
 
             console.log('Aggregated spec:', aggregatedSpec);
+            console.log('Aggregated spec paths:', Object.keys(aggregatedSpec.paths || {}));
             console.log(`Aggregated ${parsedAPIs.length} specifications`);
+
+            // Log consolidation details if any rules were applied
+            if (storedConsolidationRules.length > 0) {
+                console.log(`Applied ${storedConsolidationRules.length} consolidation rule(s):`);
+                storedConsolidationRules.forEach((rule, idx) => {
+                    if (rule.type === '2-to-1-consolidation') {
+                        console.log(`  ${idx + 1}. Consolidated ${rule.endpoint1?.operation?.method?.toUpperCase()} ${rule.endpoint1?.operation?.path} + ${rule.endpoint2?.operation?.method?.toUpperCase()} ${rule.endpoint2?.operation?.path} → ${rule.method?.toUpperCase()} ${rule.path}`);
+                        console.log(`     Merged headers: ${rule.mergedHeaders?.length || 0}`);
+                        console.log(`     Merged query params: ${rule.mergedQueryParams?.length || 0}`);
+                        console.log(`     Merged request fields: ${rule.mergedRequestBodyFields?.length || 0}`);
+                        console.log(`     Parallel execution: ${rule.rules?.parallelCalls ? 'Yes' : 'No'}`);
+                    }
+                });
+
+                // Verify the consolidated path exists in aggregated spec
+                storedConsolidationRules.forEach(rule => {
+                    if (rule.path && aggregatedSpec.paths[rule.path]) {
+                        console.log(`✅ Consolidated endpoint ${rule.path} EXISTS in aggregated spec`);
+                    } else if (rule.path) {
+                        console.log(`❌ Consolidated endpoint ${rule.path} NOT FOUND in aggregated spec`);
+                    }
+                });
+            }
 
             // Download aggregated spec if requested
             if (downloadAggregatedSpec) {
@@ -734,7 +876,7 @@ uploadForm.addEventListener('submit', async (e) => {
 
         generateBtn.disabled = false;
     }
-});
+}
 
 // Add some animation when page loads
 window.addEventListener('load', () => {
@@ -1300,6 +1442,15 @@ function populateEndpointSelection() {
     });
 }
 
+// State for consolidated endpoint editing
+let consolidatedEndpointState = {
+    headers: [],
+    queryParams: [],
+    pathParams: [],
+    requestBodyFields: [],
+    responseFields: []
+};
+
 function updateConsolidationPreview() {
     const endpoint1Value = document.getElementById('endpoint1Selector')?.value;
     const endpoint2Value = document.getElementById('endpoint2Selector')?.value;
@@ -1316,6 +1467,7 @@ function updateConsolidationPreview() {
 
     if (!endpoint1Value || !endpoint2Value) {
         previewBox.innerHTML = '<div class="preview-empty">Select 2 endpoints to see consolidation preview</div>';
+        consolidatedEndpointState = { headers: [], queryParams: [], pathParams: [], requestBodyFields: [], responseFields: [] };
         return;
     }
 
@@ -1324,83 +1476,414 @@ function updateConsolidationPreview() {
 
     const endpoint1 = parsedAPIs[api1Idx].operations[op1Idx];
     const endpoint2 = parsedAPIs[api2Idx].operations[op2Idx];
+    const api1Name = parsedAPIs[api1Idx].title || parsedAPIs[api1Idx].fileName;
+    const api2Name = parsedAPIs[api2Idx].title || parsedAPIs[api2Idx].fileName;
 
-    // Count merged elements
-    const params1 = endpoint1.parameters || [];
-    const params2 = endpoint2.parameters || [];
-    const allParams = [...params1];
-    params2.forEach(p2 => {
-        if (!allParams.find(p1 => p1.name === p2.name && p1.in === p2.in)) {
-            allParams.push(p2);
+    // Merge and deduplicate all parameters
+    mergeEndpointParameters(endpoint1, endpoint2, api1Name, api2Name);
+
+    // Merge request body fields
+    mergeRequestBodyFields(endpoint1, endpoint2, api1Name, api2Name);
+
+    // Merge response fields
+    mergeResponseFields(endpoint1, endpoint2, api1Name, api2Name);
+
+    // Render the interactive preview
+    renderConsolidationPreview(previewBox, endpoint1, endpoint2, api1Idx, api2Idx, consolidatedPath, consolidatedMethod);
+}
+
+function mergeEndpointParameters(ep1, ep2, source1, source2) {
+    const params1 = ep1.parameters || [];
+    const params2 = ep2.parameters || [];
+
+    // Reset state
+    consolidatedEndpointState.headers = [];
+    consolidatedEndpointState.queryParams = [];
+    consolidatedEndpointState.pathParams = [];
+
+    const paramMap = new Map();
+
+    // Add params from endpoint 1
+    params1.forEach(p => {
+        const key = `${p.in}:${p.name}`;
+        paramMap.set(key, {
+            ...p,
+            source: source1,
+            enabled: true,
+            defaultValue: p.default || ''
+        });
+    });
+
+    // Add/merge params from endpoint 2
+    params2.forEach(p => {
+        const key = `${p.in}:${p.name}`;
+        if (paramMap.has(key)) {
+            const existing = paramMap.get(key);
+            existing.sources = [existing.source, source2];
+            existing.required = existing.required || p.required;
+        } else {
+            paramMap.set(key, {
+                ...p,
+                source: source2,
+                enabled: true,
+                defaultValue: p.default || ''
+            });
         }
     });
 
-    previewBox.innerHTML = `
+    // Categorize by type
+    paramMap.forEach((param, key) => {
+        if (param.in === 'header') {
+            consolidatedEndpointState.headers.push(param);
+        } else if (param.in === 'query') {
+            consolidatedEndpointState.queryParams.push(param);
+        } else if (param.in === 'path') {
+            consolidatedEndpointState.pathParams.push(param);
+        }
+    });
+}
+
+function mergeRequestBodyFields(ep1, ep2, source1, source2) {
+    consolidatedEndpointState.requestBodyFields = [];
+
+    const addFieldsFromBody = (body, source) => {
+        if (!body?.content?.['application/json']?.schema) return;
+        const schema = body.content['application/json'].schema;
+        const required = schema.required || [];
+
+        if (schema.properties) {
+            Object.entries(schema.properties).forEach(([name, prop]) => {
+                const existing = consolidatedEndpointState.requestBodyFields.find(f => f.name === name);
+                if (existing) {
+                    existing.sources = existing.sources || [existing.source];
+                    existing.sources.push(source);
+                } else {
+                    consolidatedEndpointState.requestBodyFields.push({
+                        name,
+                        type: prop.type || 'string',
+                        description: prop.description || '',
+                        required: required.includes(name),
+                        source,
+                        enabled: true,
+                        defaultValue: prop.default || ''
+                    });
+                }
+            });
+        }
+    };
+
+    addFieldsFromBody(ep1.requestBody, source1);
+    addFieldsFromBody(ep2.requestBody, source2);
+}
+
+function mergeResponseFields(ep1, ep2, source1, source2) {
+    consolidatedEndpointState.responseFields = [];
+
+    const addFieldsFromResponse = (responses, source) => {
+        const successResponse = responses?.['200'] || responses?.['201'];
+        if (!successResponse?.content?.['application/json']?.schema) return;
+        const schema = successResponse.content['application/json'].schema;
+
+        if (schema.properties) {
+            Object.entries(schema.properties).forEach(([name, prop]) => {
+                const existing = consolidatedEndpointState.responseFields.find(f => f.name === name);
+                if (existing) {
+                    existing.sources = existing.sources || [existing.source];
+                    existing.sources.push(source);
+                } else {
+                    consolidatedEndpointState.responseFields.push({
+                        name,
+                        type: prop.type || 'string',
+                        description: prop.description || '',
+                        source,
+                        enabled: true
+                    });
+                }
+            });
+        }
+    };
+
+    addFieldsFromResponse(ep1.responses, source1);
+    addFieldsFromResponse(ep2.responses, source2);
+}
+
+function renderConsolidationPreview(container, ep1, ep2, api1Idx, api2Idx, path, method) {
+    const api1Name = parsedAPIs[api1Idx].title || parsedAPIs[api1Idx].fileName;
+    const api2Name = parsedAPIs[api2Idx].title || parsedAPIs[api2Idx].fileName;
+
+    container.innerHTML = `
         <div class="consolidation-preview-content">
-            <div class="preview-header">
-                <h4 style="margin: 0 0 16px 0; color: #10B981; font-size: 1.1rem;">
-                    ✓ Consolidation Result
+            <!-- Summary Header -->
+            <div class="preview-header" style="background: #ECFDF5; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <h4 style="margin: 0; color: #10B981; font-size: 1rem;">
+                    ✓ Consolidating 2 Endpoints → 1
                 </h4>
-            </div>
-
-            <div class="preview-transformation">
-                <div class="original-endpoints">
-                    <div class="original-endpoint">
-                        <span class="method-badge method-${endpoint1.method.toLowerCase()}">${endpoint1.method.toUpperCase()}</span>
-                        <code>${endpoint1.path}</code>
-                        <small>${parsedAPIs[api1Idx].title || parsedAPIs[api1Idx].fileName}</small>
-                    </div>
-                    <div style="text-align: center; color: #6B7280; font-weight: 700; padding: 8px;">+</div>
-                    <div class="original-endpoint">
-                        <span class="method-badge method-${endpoint2.method.toLowerCase()}">${endpoint2.method.toUpperCase()}</span>
-                        <code>${endpoint2.path}</code>
-                        <small>${parsedAPIs[api2Idx].title || parsedAPIs[api2Idx].fileName}</small>
-                    </div>
-                </div>
-
-                <div style="text-align: center; padding: 16px 0;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <polyline points="19 12 12 19 5 12"></polyline>
-                    </svg>
-                    <div style="color: #10B981; font-weight: 700; margin-top: 4px;">BECOMES</div>
-                </div>
-
-                <div class="consolidated-endpoint-result">
-                    <span class="method-badge method-${consolidatedMethod}">${consolidatedMethod.toUpperCase()}</span>
-                    <code style="font-size: 1.1rem; font-weight: 700;">${consolidatedPath || '/api/consolidated'}</code>
+                <div style="margin-top: 8px; font-size: 0.85rem; color: #374151;">
+                    <code>${ep1.method.toUpperCase()} ${ep1.path}</code> + <code>${ep2.method.toUpperCase()} ${ep2.path}</code>
+                    → <strong>${(method || 'GET').toUpperCase()} ${path || '/api/consolidated'}</strong>
                 </div>
             </div>
 
-            <div class="merge-stats">
-                <div class="merge-stat">
-                    <strong>${allParams.length}</strong>
-                    <span>Parameters</span>
-                    <small>(${params1.length} + ${params2.length} merged)</small>
+            <!-- Headers Section -->
+            <div class="editable-section" style="margin-bottom: 16px;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h5 style="margin: 0; color: #4F46E5;">🔗 Headers (${consolidatedEndpointState.headers.length})</h5>
+                    <button type="button" class="btn-small" onclick="addConsolidatedHeader()">+ Add Header</button>
                 </div>
-                <div class="merge-stat">
-                    <strong>2</strong>
-                    <span>API Calls</span>
-                    <small>(executed in parallel)</small>
-                </div>
-                <div class="merge-stat">
-                    <strong>1</strong>
-                    <span>Response</span>
-                    <small>(merged from both)</small>
+                <div id="consolidatedHeadersList" class="editable-list">
+                    ${renderEditableHeaders()}
                 </div>
             </div>
 
-            <div class="code-generation-preview">
-                <h5 style="margin: 0 0 8px 0; color: #374151;">Generated Code Will:</h5>
-                <ul style="margin: 0; padding-left: 20px; color: #6B7280; font-size: 0.9rem;">
-                    <li>Call <code>${endpoint1.method.toUpperCase()} ${endpoint1.path}</code></li>
-                    <li>Call <code>${endpoint2.method.toUpperCase()} ${endpoint2.path}</code></li>
-                    <li>Merge both responses into single object</li>
-                    <li>Return combined result to client</li>
-                </ul>
+            <!-- Query Parameters Section -->
+            <div class="editable-section" style="margin-bottom: 16px;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h5 style="margin: 0; color: #4F46E5;">❓ Query Parameters (${consolidatedEndpointState.queryParams.length})</h5>
+                    <button type="button" class="btn-small" onclick="addConsolidatedQueryParam()">+ Add Param</button>
+                </div>
+                <div id="consolidatedQueryParamsList" class="editable-list">
+                    ${renderEditableQueryParams()}
+                </div>
+            </div>
+
+            <!-- Path Parameters Section -->
+            ${consolidatedEndpointState.pathParams.length > 0 ? `
+            <div class="editable-section" style="margin-bottom: 16px;">
+                <div class="section-header" style="margin-bottom: 8px;">
+                    <h5 style="margin: 0; color: #4F46E5;">📍 Path Parameters (${consolidatedEndpointState.pathParams.length})</h5>
+                </div>
+                <div id="consolidatedPathParamsList" class="editable-list">
+                    ${renderEditablePathParams()}
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Request Body Section -->
+            <div class="editable-section" style="margin-bottom: 16px;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h5 style="margin: 0; color: #059669;">📤 Request Body Fields (${consolidatedEndpointState.requestBodyFields.length})</h5>
+                    <button type="button" class="btn-small" onclick="addConsolidatedRequestField()">+ Add Field</button>
+                </div>
+                <div id="consolidatedRequestBodyList" class="editable-list">
+                    ${renderEditableRequestBody()}
+                </div>
+            </div>
+
+            <!-- Response Section -->
+            <div class="editable-section" style="margin-bottom: 16px;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h5 style="margin: 0; color: #DC2626;">📥 Response Fields (${consolidatedEndpointState.responseFields.length})</h5>
+                    <button type="button" class="btn-small" onclick="addConsolidatedResponseField()">+ Add Field</button>
+                </div>
+                <div id="consolidatedResponseList" class="editable-list">
+                    ${renderEditableResponse()}
+                </div>
             </div>
         </div>
     `;
+}
+
+function renderEditableHeaders() {
+    if (consolidatedEndpointState.headers.length === 0) {
+        return '<div class="empty-message" style="color: #6B7280; font-style: italic; padding: 8px;">No headers found. Click "+ Add Header" to add one.</div>';
+    }
+
+    return consolidatedEndpointState.headers.map((h, idx) => `
+        <div class="editable-item" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${h.enabled ? '#F9FAFB' : '#FEE2E2'}; border-radius: 4px; margin-bottom: 4px;">
+            <input type="checkbox" ${h.enabled ? 'checked' : ''} onchange="toggleConsolidatedItem('headers', ${idx}, this.checked)" title="Include in consolidated endpoint">
+            <input type="text" value="${h.name}" class="input-small" style="width: 150px;" onchange="updateConsolidatedItem('headers', ${idx}, 'name', this.value)" placeholder="Header name">
+            <input type="text" value="${h.defaultValue || ''}" class="input-small" style="width: 120px;" onchange="updateConsolidatedItem('headers', ${idx}, 'defaultValue', this.value)" placeholder="Default value">
+            <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" ${h.required ? 'checked' : ''} onchange="updateConsolidatedItem('headers', ${idx}, 'required', this.checked)"> Required
+            </label>
+            <span class="source-badge" style="font-size: 0.7rem; background: #E0E7FF; color: #4338CA; padding: 2px 6px; border-radius: 4px;">${h.sources ? h.sources.join(', ') : h.source}</span>
+            <button type="button" class="btn-remove-small" onclick="removeConsolidatedItem('headers', ${idx})" title="Remove">×</button>
+        </div>
+    `).join('');
+}
+
+function renderEditableQueryParams() {
+    if (consolidatedEndpointState.queryParams.length === 0) {
+        return '<div class="empty-message" style="color: #6B7280; font-style: italic; padding: 8px;">No query parameters found.</div>';
+    }
+
+    return consolidatedEndpointState.queryParams.map((p, idx) => `
+        <div class="editable-item" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${p.enabled ? '#F9FAFB' : '#FEE2E2'}; border-radius: 4px; margin-bottom: 4px;">
+            <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="toggleConsolidatedItem('queryParams', ${idx}, this.checked)">
+            <input type="text" value="${p.name}" class="input-small" style="width: 120px;" onchange="updateConsolidatedItem('queryParams', ${idx}, 'name', this.value)" placeholder="Param name">
+            <select class="input-small" style="width: 80px;" onchange="updateConsolidatedItem('queryParams', ${idx}, 'type', this.value)">
+                <option value="string" ${(p.schema?.type || p.type) === 'string' ? 'selected' : ''}>string</option>
+                <option value="integer" ${(p.schema?.type || p.type) === 'integer' ? 'selected' : ''}>integer</option>
+                <option value="boolean" ${(p.schema?.type || p.type) === 'boolean' ? 'selected' : ''}>boolean</option>
+                <option value="array" ${(p.schema?.type || p.type) === 'array' ? 'selected' : ''}>array</option>
+            </select>
+            <input type="text" value="${p.defaultValue || ''}" class="input-small" style="width: 100px;" onchange="updateConsolidatedItem('queryParams', ${idx}, 'defaultValue', this.value)" placeholder="Default">
+            <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" ${p.required ? 'checked' : ''} onchange="updateConsolidatedItem('queryParams', ${idx}, 'required', this.checked)"> Req
+            </label>
+            <span class="source-badge" style="font-size: 0.7rem; background: #E0E7FF; color: #4338CA; padding: 2px 6px; border-radius: 4px;">${p.source}</span>
+            <button type="button" class="btn-remove-small" onclick="removeConsolidatedItem('queryParams', ${idx})">×</button>
+        </div>
+    `).join('');
+}
+
+function renderEditablePathParams() {
+    return consolidatedEndpointState.pathParams.map((p, idx) => `
+        <div class="editable-item" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #F9FAFB; border-radius: 4px; margin-bottom: 4px;">
+            <span style="font-weight: 600;">{${p.name}}</span>
+            <select class="input-small" style="width: 80px;" onchange="updateConsolidatedItem('pathParams', ${idx}, 'type', this.value)">
+                <option value="string" ${(p.schema?.type || p.type) === 'string' ? 'selected' : ''}>string</option>
+                <option value="integer" ${(p.schema?.type || p.type) === 'integer' ? 'selected' : ''}>integer</option>
+            </select>
+            <span class="source-badge" style="font-size: 0.7rem; background: #E0E7FF; color: #4338CA; padding: 2px 6px; border-radius: 4px;">${p.source}</span>
+        </div>
+    `).join('');
+}
+
+function renderEditableRequestBody() {
+    if (consolidatedEndpointState.requestBodyFields.length === 0) {
+        return '<div class="empty-message" style="color: #6B7280; font-style: italic; padding: 8px;">No request body fields found.</div>';
+    }
+
+    return consolidatedEndpointState.requestBodyFields.map((f, idx) => `
+        <div class="editable-item" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${f.enabled ? '#F0FDF4' : '#FEE2E2'}; border-radius: 4px; margin-bottom: 4px;">
+            <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleConsolidatedItem('requestBodyFields', ${idx}, this.checked)">
+            <input type="text" value="${f.name}" class="input-small" style="width: 120px;" onchange="updateConsolidatedItem('requestBodyFields', ${idx}, 'name', this.value)" placeholder="Field name">
+            <select class="input-small" style="width: 80px;" onchange="updateConsolidatedItem('requestBodyFields', ${idx}, 'type', this.value)">
+                <option value="string" ${f.type === 'string' ? 'selected' : ''}>string</option>
+                <option value="integer" ${f.type === 'integer' ? 'selected' : ''}>integer</option>
+                <option value="number" ${f.type === 'number' ? 'selected' : ''}>number</option>
+                <option value="boolean" ${f.type === 'boolean' ? 'selected' : ''}>boolean</option>
+                <option value="object" ${f.type === 'object' ? 'selected' : ''}>object</option>
+                <option value="array" ${f.type === 'array' ? 'selected' : ''}>array</option>
+            </select>
+            <input type="text" value="${f.defaultValue || ''}" class="input-small" style="width: 100px;" onchange="updateConsolidatedItem('requestBodyFields', ${idx}, 'defaultValue', this.value)" placeholder="Default">
+            <label style="font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" ${f.required ? 'checked' : ''} onchange="updateConsolidatedItem('requestBodyFields', ${idx}, 'required', this.checked)"> Req
+            </label>
+            <span class="source-badge" style="font-size: 0.7rem; background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px;">${f.sources ? f.sources.join(', ') : f.source}</span>
+            <button type="button" class="btn-remove-small" onclick="removeConsolidatedItem('requestBodyFields', ${idx})">×</button>
+        </div>
+    `).join('');
+}
+
+function renderEditableResponse() {
+    if (consolidatedEndpointState.responseFields.length === 0) {
+        return '<div class="empty-message" style="color: #6B7280; font-style: italic; padding: 8px;">No response fields found.</div>';
+    }
+
+    return consolidatedEndpointState.responseFields.map((f, idx) => `
+        <div class="editable-item" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: ${f.enabled ? '#FEF2F2' : '#E5E7EB'}; border-radius: 4px; margin-bottom: 4px;">
+            <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="toggleConsolidatedItem('responseFields', ${idx}, this.checked)">
+            <input type="text" value="${f.name}" class="input-small" style="width: 120px;" onchange="updateConsolidatedItem('responseFields', ${idx}, 'name', this.value)" placeholder="Field name">
+            <select class="input-small" style="width: 80px;" onchange="updateConsolidatedItem('responseFields', ${idx}, 'type', this.value)">
+                <option value="string" ${f.type === 'string' ? 'selected' : ''}>string</option>
+                <option value="integer" ${f.type === 'integer' ? 'selected' : ''}>integer</option>
+                <option value="number" ${f.type === 'number' ? 'selected' : ''}>number</option>
+                <option value="boolean" ${f.type === 'boolean' ? 'selected' : ''}>boolean</option>
+                <option value="object" ${f.type === 'object' ? 'selected' : ''}>object</option>
+                <option value="array" ${f.type === 'array' ? 'selected' : ''}>array</option>
+            </select>
+            <span class="source-badge" style="font-size: 0.7rem; background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px;">${f.sources ? f.sources.join(', ') : f.source}</span>
+            <button type="button" class="btn-remove-small" onclick="removeConsolidatedItem('responseFields', ${idx})">×</button>
+        </div>
+    `).join('');
+}
+
+// Event handlers for editing consolidated items
+window.toggleConsolidatedItem = function(category, index, enabled) {
+    consolidatedEndpointState[category][index].enabled = enabled;
+    refreshConsolidatedList(category);
+};
+
+window.updateConsolidatedItem = function(category, index, field, value) {
+    consolidatedEndpointState[category][index][field] = value;
+};
+
+window.removeConsolidatedItem = function(category, index) {
+    consolidatedEndpointState[category].splice(index, 1);
+    refreshConsolidatedList(category);
+};
+
+window.addConsolidatedHeader = function() {
+    consolidatedEndpointState.headers.push({
+        name: 'X-Custom-Header',
+        in: 'header',
+        required: false,
+        enabled: true,
+        defaultValue: '',
+        source: 'Custom'
+    });
+    refreshConsolidatedList('headers');
+};
+
+window.addConsolidatedQueryParam = function() {
+    consolidatedEndpointState.queryParams.push({
+        name: 'customParam',
+        in: 'query',
+        type: 'string',
+        required: false,
+        enabled: true,
+        defaultValue: '',
+        source: 'Custom'
+    });
+    refreshConsolidatedList('queryParams');
+};
+
+window.addConsolidatedRequestField = function() {
+    consolidatedEndpointState.requestBodyFields.push({
+        name: 'customField',
+        type: 'string',
+        required: false,
+        enabled: true,
+        defaultValue: '',
+        source: 'Custom'
+    });
+    refreshConsolidatedList('requestBodyFields');
+};
+
+window.addConsolidatedResponseField = function() {
+    consolidatedEndpointState.responseFields.push({
+        name: 'customField',
+        type: 'string',
+        enabled: true,
+        source: 'Custom'
+    });
+    refreshConsolidatedList('responseFields');
+};
+
+function refreshConsolidatedList(category) {
+    const listId = {
+        'headers': 'consolidatedHeadersList',
+        'queryParams': 'consolidatedQueryParamsList',
+        'pathParams': 'consolidatedPathParamsList',
+        'requestBodyFields': 'consolidatedRequestBodyList',
+        'responseFields': 'consolidatedResponseList'
+    }[category];
+
+    const listElement = document.getElementById(listId);
+    if (!listElement) return;
+
+    const renderFn = {
+        'headers': renderEditableHeaders,
+        'queryParams': renderEditableQueryParams,
+        'pathParams': renderEditablePathParams,
+        'requestBodyFields': renderEditableRequestBody,
+        'responseFields': renderEditableResponse
+    }[category];
+
+    listElement.innerHTML = renderFn();
+
+    // Update section header count
+    updateConsolidationSectionCounts();
+}
+
+function updateConsolidationSectionCounts() {
+    // Update counts in section headers if needed
+    const previewBox = document.getElementById('consolidationPreviewBox');
+    if (!previewBox) return;
+
+    // The counts are embedded in the headers, so we just need to make sure the state is reflected
 }
 
 function updateEndpointDetails(elementId, endpointValue) {
@@ -1452,7 +1935,7 @@ function applyConsolidation() {
     const operation1 = api1.operations[op1Idx];
     const operation2 = api2.operations[op2Idx];
 
-    // Get consolidation rules
+    // Get consolidation rules from checkboxes
     const rules = {
         mergeParameters: document.getElementById('mergeParameters')?.checked || false,
         mergeResponses: document.getElementById('mergeResponses')?.checked || false,
@@ -1461,20 +1944,21 @@ function applyConsolidation() {
         addSourceTracking: document.getElementById('addSourceTracking')?.checked || false
     };
 
-    // Merge parameters
-    const mergedParameters = [];
-    const params1 = operation1.parameters || [];
-    const params2 = operation2.parameters || [];
+    // Use the edited state from the interactive UI (only enabled items)
+    const enabledHeaders = consolidatedEndpointState.headers.filter(h => h.enabled);
+    const enabledQueryParams = consolidatedEndpointState.queryParams.filter(p => p.enabled);
+    const enabledPathParams = consolidatedEndpointState.pathParams.filter(p => p.enabled !== false);
+    const enabledRequestBodyFields = consolidatedEndpointState.requestBodyFields.filter(f => f.enabled);
+    const enabledResponseFields = consolidatedEndpointState.responseFields.filter(f => f.enabled);
 
-    params1.forEach(p => mergedParameters.push({ ...p, source: api1.title || api1.fileName }));
-    params2.forEach(p2 => {
-        const existing = mergedParameters.find(p1 => p1.name === p2.name && p1.in === p2.in);
-        if (!existing) {
-            mergedParameters.push({ ...p2, source: api2.title || api2.fileName });
-        }
-    });
+    // Build merged parameters from edited state
+    const mergedParameters = [
+        ...enabledHeaders.map(h => ({ ...h, in: 'header' })),
+        ...enabledQueryParams.map(p => ({ ...p, in: 'query' })),
+        ...enabledPathParams.map(p => ({ ...p, in: 'path' }))
+    ];
 
-    // Create consolidation configuration
+    // Create consolidation configuration with edited fields
     const consolidationKey = `CONSOLIDATED_${Date.now()}`;
     const consolidation = {
         id: consolidationKey,
@@ -1488,7 +1972,10 @@ function applyConsolidation() {
             operation: {
                 method: operation1.method,
                 path: operation1.path,
-                summary: operation1.summary
+                summary: operation1.summary,
+                parameters: operation1.parameters,
+                requestBody: operation1.requestBody,
+                responses: operation1.responses
             }
         },
         endpoint2: {
@@ -1498,10 +1985,19 @@ function applyConsolidation() {
             operation: {
                 method: operation2.method,
                 path: operation2.path,
-                summary: operation2.summary
+                summary: operation2.summary,
+                parameters: operation2.parameters,
+                requestBody: operation2.requestBody,
+                responses: operation2.responses
             }
         },
+        // Use the user-edited merged data
         mergedParameters: mergedParameters,
+        mergedHeaders: enabledHeaders,
+        mergedQueryParams: enabledQueryParams,
+        mergedPathParams: enabledPathParams,
+        mergedRequestBodyFields: enabledRequestBodyFields,
+        mergedResponseFields: enabledResponseFields,
         rules: rules,
         type: '2-to-1-consolidation',
         createdAt: new Date().toISOString()
@@ -2406,23 +2902,27 @@ function populateAggregatorHeaderConfig() {
 
     extractAllHeaders();
 
-    const defaultHeaders = [
-        'Authorization',
-        'X-Request-ID',
-        'X-Correlation-ID',
-        'X-Tenant-ID'
-    ];
-
+    // Only use headers that are actually detected from the specs
+    // Don't add hardcoded default headers that aren't in the client specs
     const allHeadersList = Array.from(allHeaders);
-    defaultHeaders.forEach(h => {
-        if (!allHeadersList.includes(h)) {
-            allHeadersList.unshift(h);
-        }
-    });
+
+    // Show message if no headers found
+    if (allHeadersList.length === 0) {
+        headerConfig.innerHTML = `
+            <div class="no-headers-message" style="padding: 16px; color: #6B7280; text-align: center; font-style: italic;">
+                No header parameters found in the uploaded specs.<br>
+                <small>Use "Add Custom Header" to manually add headers for propagation.</small>
+            </div>
+        `;
+        return;
+    }
 
     allHeadersList.forEach((headerName, index) => {
-        const config = selectedHeaders[headerName] || { propagate: false, transform: false };
-        const isDetected = allHeaders.has(headerName);
+        // Default to propagate: true for all detected headers
+        const config = selectedHeaders[headerName] || { propagate: true, transform: false };
+        if (!selectedHeaders[headerName]) {
+            selectedHeaders[headerName] = config;
+        }
 
         const item = document.createElement('div');
         item.className = 'header-item';
@@ -2433,9 +2933,7 @@ function populateAggregatorHeaderConfig() {
                 <label for="agg-header-${index}" class="header-label">${headerName}</label>
             </div>
             <div class="header-source-badge">
-                <span class="badge ${isDetected ? 'badge-detected' : 'badge-default'}">
-                    ${isDetected ? '🔍 Detected' : '⭐ Default'}
-                </span>
+                <span class="badge badge-detected">🔍 From Spec</span>
             </div>
         `;
         headerConfig.appendChild(item);
