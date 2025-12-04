@@ -15,7 +15,8 @@
       "Bash(dir \"C:\\Projects\\common-sdk\\test-quarkus-client\" /s /b)",
       "Bash(dir /b \"C:\\Users\\Admin\\AppData\\Local\\Temp\\a742c26c-238e-45f5-b4e5-043dd7983f14_api-quarkus-fullstack-sdk (4).zip.f14\\aggregator-service\\src\\main\\java\\com\\example\\api\")",
       "Bash(dir:*)",
-      "Bash(npx http-server:*)"
+      "Bash(npx http-server:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

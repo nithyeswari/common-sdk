@@ -6,9 +6,14 @@
     "auditLog": "C:\\Projects\\common-sdk\\logs\\.f5e8a1f9d54065d4e98c942923b275d7f631d453-audit.json",
     "files": [
         {
-            "date": 1762273832986,
-            "name": "C:\\Projects\\common-sdk\\logs\\combined-2025-11-04.log",
-            "hash": "8d9063982ee3638f79bb7187efea0b5560967512ffaccb6f69a24c57dbc6db9d"
+            "date": 1764414300061,
+            "name": "C:\\Projects\\common-sdk\\logs\\combined-2025-11-29.log",
+            "hash": "fbee6f6b24d1226121499f9644407525f4fec1fc5a502b46525a1f84b6045204"
+        },
+        {
+            "date": 1764793402880,
+            "name": "C:\\Projects\\common-sdk\\logs\\combined-2025-12-03.log",
+            "hash": "e23c35114043512d9ee1c7eec495ede1031fce28066928f5328a20bce78d49eb"
         }
     ],
     "hashType": "sha256"
